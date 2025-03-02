@@ -23,12 +23,22 @@ const BUDGET_CATEGORIES = {
 const contentArea = document.getElementById('content-area');
 const navLinks = document.querySelectorAll('.nav-link');
 
+// Supabase Configuration
+const SUPABASE_URL = 'https://rpjmdkvravopqtuzxksv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwam1ka3ZyYXZvcHF0dXp4a3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA4OTEwNTcsImV4cCI6MjA1NjQ2NzA1N30.I4u76FDus2nRPfQWwKYaV39DhqYWLFionPSB4KMk1PE';
+// Initialize the Supabase client correctly
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // Event Listeners
 document.getElementById('nav-dashboard').addEventListener('click', () => loadDashboardView());
 document.getElementById('nav-expenses').addEventListener('click', () => loadExpensesView());
 document.getElementById('nav-income').addEventListener('click', () => loadIncomeView());
 document.getElementById('nav-budget').addEventListener('click', () => loadBudgetView());
 document.getElementById('nav-reports').addEventListener('click', () => loadReportsView());
+document.getElementById('nav-signout').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    loadAuthView();
+});
 
 // Helper Functions
 function showLoading() {
@@ -87,63 +97,215 @@ function getBudgetTypeColor(type) {
 }
 
 // Data Management Functions
-function getExpenses() {
-    const expenses = localStorage.getItem(EXPENSES_KEY);
-    return expenses ? JSON.parse(expenses) : [];
-}
-
-function saveExpenseToLocalStorage(expense) {
-    const expenses = getExpenses();
-    expense.id = Date.now();
-    expenses.push(expense);
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-    return expense;
-}
-
-function deleteExpense(id) {
-    const expenses = getExpenses();
-    const filteredExpenses = expenses.filter(expense => expense.id !== id);
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(filteredExpenses));
-}
-
-function updateExpense(updatedExpense) {
-    const expenses = getExpenses();
-    const index = expenses.findIndex(expense => expense.id === updatedExpense.id);
-    if (index !== -1) {
-        expenses[index] = updatedExpense;
-        localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-        return true;
+async function getExpenses() {
+    try {
+        // Check if user is logged in
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Try to get expenses from Supabase
+            const { data, error } = await supabaseClient
+                .from('expenses')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } else {
+            // Fall back to local storage if not logged in
+            const expenses = localStorage.getItem(EXPENSES_KEY);
+            return expenses ? JSON.parse(expenses) : [];
+        }
+    } catch (error) {
+        console.error('Error fetching expenses:', error);
+        // Fall back to local storage on error
+        const expenses = localStorage.getItem(EXPENSES_KEY);
+        return expenses ? JSON.parse(expenses) : [];
     }
-    return false;
 }
 
-function getIncome() {
-    const income = localStorage.getItem(INCOME_KEY);
-    return income ? JSON.parse(income) : [];
-}
-
-function saveIncome(income) {
-    const incomeList = getIncome();
-    income.id = Date.now(); // Use timestamp as ID
-    incomeList.push(income);
-    localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
-}
-
-function updateIncome(updatedIncome) {
-    const incomeList = getIncome();
-    const index = incomeList.findIndex(income => income.id === updatedIncome.id);
-    if (index !== -1) {
-        incomeList[index] = updatedIncome;
-        localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
+async function saveExpense(expense) {
+    try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return false;
+        
+        // Add user_id to expense
+        expense.user_id = user.id;
+        
+        if (expense.id) {
+            // Update existing expense
+            const { error } = await supabaseClient
+                .from('expenses')
+                .update(expense)
+                .eq('id', expense.id);
+            
+            if (error) throw error;
+        } else {
+            // Create new expense
+            const { error } = await supabaseClient
+                .from('expenses')
+                .insert([expense]);
+            
+            if (error) throw error;
+        }
+        
+        // If we're on the expenses view, refresh it
+        if (document.querySelector('#nav-expenses').classList.contains('active')) {
+            loadExpensesView();
+        }
+        
         return true;
+    } catch (error) {
+        console.error('Error saving expense:', error);
+        return false;
     }
-    return false;
 }
 
-function deleteIncome(id) {
-    const incomeList = getIncome();
-    const filteredIncome = incomeList.filter(income => income.id !== id);
-    localStorage.setItem(INCOME_KEY, JSON.stringify(filteredIncome));
+async function deleteExpense(id) {
+    try {
+        const { error } = await supabaseClient
+            .from('expenses')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
+        return true;
+    } catch (error) {
+        console.error('Error deleting expense:', error);
+        return false;
+    }
+}
+
+// Add this function to clear local storage data
+function clearLocalStorageData() {
+    localStorage.removeItem(EXPENSES_KEY);
+    localStorage.removeItem(INCOME_KEY);
+    localStorage.removeItem(BUDGET_KEY);
+}
+
+// Modify the getIncome function to use Supabase when logged in
+async function getIncome() {
+    try {
+        // Check if user is logged in
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Try to get income from Supabase
+            const { data, error } = await supabaseClient
+                .from('income')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } else {
+            // Fall back to local storage if not logged in
+            const income = localStorage.getItem(INCOME_KEY);
+            return income ? JSON.parse(income) : [];
+        }
+    } catch (error) {
+        console.error('Error fetching income:', error);
+        // Fall back to local storage on error
+        const income = localStorage.getItem(INCOME_KEY);
+        return income ? JSON.parse(income) : [];
+    }
+}
+
+async function saveIncome(income) {
+    try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Add user_id to income
+            income.user_id = user.id;
+            
+            // Save to Supabase
+            const { error } = await supabaseClient
+                .from('income')
+                .insert([income]);
+            
+            if (error) throw error;
+        } else {
+            // Fall back to local storage
+            const incomeList = await getIncome();
+            income.id = Date.now(); // Use timestamp as ID
+            incomeList.push(income);
+            localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
+        }
+        
+        // If we're on the income view, refresh it
+        if (document.querySelector('#nav-income').classList.contains('active')) {
+            loadIncomeView();
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error saving income:', error);
+        return false;
+    }
+}
+
+async function updateIncome(updatedIncome) {
+    try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Update in Supabase
+            const { error } = await supabaseClient
+                .from('income')
+                .update(updatedIncome)
+                .eq('id', updatedIncome.id);
+            
+            if (error) throw error;
+        } else {
+            // Fall back to local storage
+            const incomeList = await getIncome();
+            const index = incomeList.findIndex(income => income.id === updatedIncome.id);
+            if (index !== -1) {
+                incomeList[index] = updatedIncome;
+                localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
+            } else {
+                return false;
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error updating income:', error);
+        return false;
+    }
+}
+
+async function deleteIncome(id) {
+    try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Delete from Supabase
+            const { error } = await supabaseClient
+                .from('income')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+        } else {
+            // Fall back to local storage
+            const incomeList = await getIncome();
+            const filteredIncome = incomeList.filter(income => income.id !== id);
+            localStorage.setItem(INCOME_KEY, JSON.stringify(filteredIncome));
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error deleting income:', error);
+        return false;
+    }
 }
 
 function getBudget() {
@@ -167,744 +329,806 @@ function saveBudget(budget) {
 function loadDashboardView() {
     showLoading();
     
-    const expenses = getExpenses();
-    const income = getIncome();
-    const budget = getBudget();
+    // Add a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        showError("Dashboard loading timed out. Please refresh the page.");
+    }, 10000);
     
-    // Calculate summary data
-    const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-    const totalIncome = income.reduce((sum, income) => sum + parseFloat(income.amount), 0);
-    const balance = totalIncome - totalExpenses;
-    
-    // Calculate category totals
-    const categoryTotals = {};
-    expenses.forEach(expense => {
-        if (!categoryTotals[expense.category]) {
-            categoryTotals[expense.category] = 0;
-        }
-        categoryTotals[expense.category] += parseFloat(expense.amount);
-    });
-    
-    // Calculate budget type totals (Needs, Wants, Savings)
-    const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
-    const typeCategories = { Needs: [], Wants: [], Savings: [] };
-    
-    Object.keys(categoryTotals).forEach(category => {
-        const type = getBudgetCategoryType(category);
-        typeTotals[type] += categoryTotals[category];
-        typeCategories[type].push(category);
-    });
-    
-    const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
-    
-    // Get recent transactions
-    const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-    const recentIncome = [...income].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-    
-    let html = `
-        <div class="card">
-            <div class="card-header">Budget Buddy Dashboard</div>
-            <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <div class="summary-card bg-light">
-                            <div class="value ${balance >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(balance)}</div>
-                            <div class="label">Current Balance</div>
+    // Wrap in async function to properly handle promises
+    (async function() {
+        try {
+            const expenses = await getExpenses();
+            const income = await getIncome();
+            const budget = getBudget();
+            
+            // Clear the timeout since we've loaded data
+            clearTimeout(loadingTimeout);
+            
+            // Log data for debugging
+            console.log("Loaded expenses:", expenses);
+            console.log("Loaded income:", income);
+            console.log("Loaded budget:", budget);
+            
+            // Calculate summary data
+            const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+            const totalIncome = income.reduce((sum, income) => sum + parseFloat(income.amount), 0);
+            const balance = totalIncome - totalExpenses;
+            
+            // Calculate category totals
+            const categoryTotals = {};
+            expenses.forEach(expense => {
+                if (!categoryTotals[expense.category]) {
+                    categoryTotals[expense.category] = 0;
+                }
+                categoryTotals[expense.category] += parseFloat(expense.amount);
+            });
+            
+            // Calculate budget type totals (Needs, Wants, Savings)
+            const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
+            const typeCategories = { Needs: [], Wants: [], Savings: [] };
+            
+            Object.keys(categoryTotals).forEach(category => {
+                const type = getBudgetCategoryType(category);
+                typeTotals[type] += categoryTotals[category];
+                typeCategories[type].push(category);
+            });
+            
+            const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
+            
+            // Get recent transactions
+            const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            const recentIncome = [...income].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">Budget Buddy Dashboard</div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="summary-card bg-light">
+                                    <div class="value ${balance >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(balance)}</div>
+                                    <div class="label">Current Balance</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="summary-card bg-light">
+                                    <div class="value text-success">${formatCurrency(totalIncome)}</div>
+                                    <div class="label">Total Income</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="summary-card bg-light">
+                                    <div class="value text-danger">${formatCurrency(totalExpenses)}</div>
+                                    <div class="label">Total Expenses</div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="summary-card bg-light">
-                            <div class="value text-success">${formatCurrency(totalIncome)}</div>
-                            <div class="label">Total Income</div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Expense Breakdown</h5>
+                                <div class="chart-container">
+                                    <canvas id="expense-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Recent Transactions</h5>
+                                <div class="list-group">`;
+            
+            // Add recent expenses
+            recentExpenses.forEach(expense => {
+                html += `
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">${expense.description}</div>
+                            <small class="text-muted">${expense.date} - ${expense.category}</small>
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="summary-card bg-light">
-                            <div class="value text-danger">${formatCurrency(totalExpenses)}</div>
-                            <div class="label">Total Expenses</div>
+                        <span class="badge bg-danger rounded-pill">${formatCurrency(expense.amount)}</span>
+                    </div>`;
+            });
+            
+            // Add recent income
+            recentIncome.forEach(income => {
+                html += `
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">${income.description}</div>
+                            <small class="text-muted">${income.date} - Income</small>
                         </div>
-                    </div>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5>Expense Breakdown</h5>
-                        <div class="chart-container">
-                            <canvas id="expense-chart"></canvas>
+                        <span class="badge bg-success rounded-pill">${formatCurrency(income.amount)}</span>
+                    </div>`;
+            });
+            
+            html += `
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5>Recent Transactions</h5>
-                        <div class="list-group">`;
-    
-    // Add recent expenses
-    recentExpenses.forEach(expense => {
-        html += `
-            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="fw-bold">${expense.description}</div>
-                    <small class="text-muted">${expense.date} - ${expense.category}</small>
-                </div>
-                <span class="badge bg-danger rounded-pill">${formatCurrency(expense.amount)}</span>
-            </div>`;
-    });
-    
-    // Add recent income
-    recentIncome.forEach(income => {
-        html += `
-            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="fw-bold">${income.description}</div>
-                    <small class="text-muted">${income.date} - Income</small>
-                </div>
-                <span class="badge bg-success rounded-pill">${formatCurrency(income.amount)}</span>
-            </div>`;
-    });
-    
-    html += `
+                    </div>`;
+            
+            // Add budget allocation section to dashboard
+            html += `
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h5>Budget Allocation</h5>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card h-100" style="border-color: ${getBudgetTypeColor('Needs')};">
+                                    <div class="card-body d-flex flex-column">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="card-title mb-0">Needs (${budget.allocation.Needs}%)</h6>
+                                            <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                                data-bs-toggle="popover" 
+                                                data-bs-placement="top" 
+                                                data-bs-content="Essential expenses like housing, food, utilities, and healthcare."
+                                                data-bs-trigger="focus">
+                                                <i class="bi bi-info-circle"></i>
+                                            </button>
+                                        </div>
+                                        <div class="mt-auto">
+                                            <div class="progress" style="height: 25px;">
+                                                <div class="progress-bar position-relative" 
+                                                    style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
+                                                    <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                        ${Math.round((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-2">
+                                                <small>${formatCurrency(typeTotals.Needs)}</small>
+                                                <small>${formatCurrency(budget.total * budget.allocation.Needs / 100)}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100" style="border-color: ${getBudgetTypeColor('Wants')};">
+                                    <div class="card-body d-flex flex-column">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="card-title mb-0">Wants (${budget.allocation.Wants}%)</h6>
+                                            <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                                data-bs-toggle="popover" 
+                                                data-bs-placement="top" 
+                                                data-bs-content="Non-essential expenses like entertainment, dining out, and shopping."
+                                                data-bs-trigger="focus">
+                                                <i class="bi bi-info-circle"></i>
+                                            </button>
+                                        </div>
+                                        <div class="mt-auto">
+                                            <div class="progress" style="height: 25px;">
+                                                <div class="progress-bar position-relative" 
+                                                    style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
+                                                    <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                        ${Math.round((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-2">
+                                                <small>${formatCurrency(typeTotals.Wants)}</small>
+                                                <small>${formatCurrency(budget.total * budget.allocation.Wants / 100)}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100" style="border-color: ${getBudgetTypeColor('Savings')};">
+                                    <div class="card-body d-flex flex-column">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="card-title mb-0">Savings (${budget.allocation.Savings}%)</h6>
+                                            <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                                data-bs-toggle="popover" 
+                                                data-bs-placement="top" 
+                                                data-bs-content="Money set aside for future goals, investments, and emergencies."
+                                                data-bs-trigger="focus">
+                                                <i class="bi bi-info-circle"></i>
+                                            </button>
+                                        </div>
+                                        <div class="mt-auto">
+                                            <div class="progress" style="height: 25px;">
+                                                <div class="progress-bar position-relative" 
+                                                    style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
+                                                    <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                        ${Math.round((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-2">
+                                                <small>${formatCurrency(typeTotals.Savings)}</small>
+                                                <small>${formatCurrency(budget.total * budget.allocation.Savings / 100)}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
-    
-    // Add budget allocation section to dashboard
-    html += `
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <h5>Budget Allocation</h5>
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Needs')};">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="card-title mb-0">Needs (${budget.allocation.Needs}%)</h6>
-                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
-                                        data-bs-toggle="popover" 
-                                        data-bs-placement="top" 
-                                        data-bs-content="Essential expenses like housing, food, utilities, and healthcare."
-                                        data-bs-trigger="focus">
-                                        <i class="bi bi-info-circle"></i>
-                                    </button>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="progress" style="height: 25px;">
-                                        <div class="progress-bar position-relative" 
-                                            style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
-                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100 > 50 ? 'white' : 'black'};">
-                                                ${Math.round((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100)}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <small>${formatCurrency(typeTotals.Needs)}</small>
-                                        <small>${formatCurrency(budget.total * budget.allocation.Needs / 100)}</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Wants')};">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="card-title mb-0">Wants (${budget.allocation.Wants}%)</h6>
-                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
-                                        data-bs-toggle="popover" 
-                                        data-bs-placement="top" 
-                                        data-bs-content="Non-essential expenses like entertainment, dining out, and shopping."
-                                        data-bs-trigger="focus">
-                                        <i class="bi bi-info-circle"></i>
-                                    </button>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="progress" style="height: 25px;">
-                                        <div class="progress-bar position-relative" 
-                                            style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
-                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100 > 50 ? 'white' : 'black'};">
-                                                ${Math.round((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100)}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <small>${formatCurrency(typeTotals.Wants)}</small>
-                                        <small>${formatCurrency(budget.total * budget.allocation.Wants / 100)}</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Savings')};">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="card-title mb-0">Savings (${budget.allocation.Savings}%)</h6>
-                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
-                                        data-bs-toggle="popover" 
-                                        data-bs-placement="top" 
-                                        data-bs-content="Money set aside for future goals, investments, and emergencies."
-                                        data-bs-trigger="focus">
-                                        <i class="bi bi-info-circle"></i>
-                                    </button>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="progress" style="height: 25px;">
-                                        <div class="progress-bar position-relative" 
-                                            style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
-                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100 > 50 ? 'white' : 'black'};">
-                                                ${Math.round((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100)}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <small>${formatCurrency(typeTotals.Savings)}</small>
-                                        <small>${formatCurrency(budget.total * budget.allocation.Savings / 100)}</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>`;
-    
-    contentArea.innerHTML = html;
-    
-    // Create expense chart
-    const expenseCtx = document.getElementById('expense-chart').getContext('2d');
-    
-    // Prepare data for chart
-    const categories = Object.keys(categoryTotals);
-    const values = Object.values(categoryTotals);
-    const backgroundColors = categories.map(category => getCategoryColor(category));
-    
-    new Chart(expenseCtx, {
-        type: 'doughnut',
-        data: {
-            labels: categories,
-            datasets: [{
-                data: values,
-                backgroundColor: backgroundColors
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right'
+            
+            contentArea.innerHTML = html;
+            
+            // Create expense chart
+            const expenseCtx = document.getElementById('expense-chart').getContext('2d');
+            
+            // Prepare data for chart
+            const categories = Object.keys(categoryTotals);
+            const values = Object.values(categoryTotals);
+            const backgroundColors = categories.map(category => getCategoryColor(category));
+            
+            new Chart(expenseCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: backgroundColors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
                 }
-            }
-        }
-    });
-
-    // Initialize Bootstrap components
-    setTimeout(() => {
-        // Initialize popovers
-        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        popoverTriggerList.map(function (popoverTriggerEl) {
-            return new bootstrap.Popover(popoverTriggerEl, {
-                html: true,
-                container: 'body'
             });
-        });
-        
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    }, 100);
+
+            // Initialize Bootstrap components
+            setTimeout(() => {
+                // Initialize popovers
+                const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+                popoverTriggerList.map(function (popoverTriggerEl) {
+                    return new bootstrap.Popover(popoverTriggerEl, {
+                        html: true,
+                        container: 'body'
+                    });
+                });
+                
+                // Initialize tooltips
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }, 100);
+        } catch (error) {
+            // Clear the timeout
+            clearTimeout(loadingTimeout);
+            
+            console.error("Error loading dashboard:", error);
+            showError(`Error loading dashboard: ${error.message}`);
+        }
+    })();
 }
 
 function loadExpensesView() {
     showLoading();
     
-    const expenses = getExpenses();
+    // Add a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        showError("Expenses loading timed out. Please refresh the page.");
+    }, 10000);
     
-    let html = `
-        <div class="card">
-            <div class="card-header">Budget Buddy Expenses</div>
-            <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-12">
-                        <button class="btn btn-primary" id="add-expense-btn">Add New Expense</button>
-                    </div>
-                </div>
-                
-                <div id="expense-form-container" class="mb-4" style="display: none;">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 id="expense-form-title">Add New Expense</h5>
-                            <form id="expense-form">
-                                <input type="hidden" id="expense-id">
-                                <div class="mb-3">
-                                    <label for="expense-description" class="form-label">Description</label>
-                                    <input type="text" class="form-control" id="expense-description" required>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="expense-amount" class="form-label">Amount</label>
-                                        <input type="number" class="form-control" id="expense-amount" step="0.01" min="0.01" required>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <div class="form-check mt-4">
-                                            <input class="form-check-input" type="checkbox" id="expense-taxable">
-                                            <label class="form-check-label" for="expense-taxable">
-                                                Taxable?
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div id="tax-options" class="row mb-3" style="display: none;">
-                                    <div class="col-md-6">
-                                        <label for="expense-tax-rate" class="form-label">Tax Rate (%)</label>
-                                        <input type="number" class="form-control" id="expense-tax-rate" step="0.1" min="0" value="7.5">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Tax Amount</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">$</span>
-                                            <input type="text" class="form-control" id="expense-tax-amount" readonly>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="expense-category" class="form-label">Category</label>
-                                    <select class="form-select" id="expense-category" required>
-                                        <option value="">Select a category</option>
-                                        <option value="Food">Food</option>
-                                        <option value="Transportation">Transportation</option>
-                                        <option value="Housing">Housing</option>
-                                        <option value="Entertainment">Entertainment</option>
-                                        <option value="Utilities">Utilities</option>
-                                        <option value="Healthcare">Healthcare</option>
-                                        <option value="Shopping">Shopping</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Travel">Travel</option>
-                                        <option value="Investments">Investments</option>
-                                        <option value="Savings">Savings</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="expense-date" class="form-label">Date</label>
-                                    <input type="date" class="form-control" id="expense-date" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="expense-notes" class="form-label">Notes (Optional)</label>
-                                    <textarea class="form-control" id="expense-notes" rows="2"></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Total Amount</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">$</span>
-                                        <input type="text" class="form-control" id="expense-total-amount" readonly>
-                                    </div>
-                                </div>
-                                <button type="submit" class="btn btn-success">Save Expense</button>
-                                <button type="button" class="btn btn-secondary" id="cancel-expense-btn">Cancel</button>
-                            </form>
+    // Wrap in async function to properly handle promises
+    (async function() {
+        try {
+            const expenses = await getExpenses();
+            clearTimeout(loadingTimeout);
+            
+            // Log data for debugging
+            console.log("Loaded expenses:", expenses);
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">Budget Buddy Expenses</div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <button class="btn btn-primary" id="add-expense-btn">Add New Expense</button>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                        
+                        <div id="expense-form-container" class="mb-4" style="display: none;">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 id="expense-form-title">Add New Expense</h5>
+                                    <form id="expense-form">
+                                        <input type="hidden" id="expense-id">
+                                        <div class="mb-3">
+                                            <label for="expense-description" class="form-label">Description</label>
+                                            <input type="text" class="form-control" id="expense-description" required>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="expense-amount" class="form-label">Amount</label>
+                                                <input type="number" class="form-control" id="expense-amount" step="0.01" min="0.01" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <div class="form-check mt-4">
+                                                    <input class="form-check-input" type="checkbox" id="expense-taxable">
+                                                    <label class="form-check-label" for="expense-taxable">
+                                                        Taxable?
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="tax-options" class="row mb-3" style="display: none;">
+                                            <div class="col-md-6">
+                                                <label for="expense-tax-rate" class="form-label">Tax Rate (%)</label>
+                                                <input type="number" class="form-control" id="expense-tax-rate" step="0.1" min="0" value="7.5">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label">Tax Amount</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">$</span>
+                                                    <input type="text" class="form-control" id="expense-tax-amount" readonly>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="expense-category" class="form-label">Category</label>
+                                            <select class="form-select" id="expense-category" required>
+                                                <option value="">Select a category</option>
+                                                <option value="Food">Food</option>
+                                                <option value="Transportation">Transportation</option>
+                                                <option value="Housing">Housing</option>
+                                                <option value="Entertainment">Entertainment</option>
+                                                <option value="Utilities">Utilities</option>
+                                                <option value="Healthcare">Healthcare</option>
+                                                <option value="Shopping">Shopping</option>
+                                                <option value="Education">Education</option>
+                                                <option value="Travel">Travel</option>
+                                                <option value="Investments">Investments</option>
+                                                <option value="Savings">Savings</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="expense-date" class="form-label">Date</label>
+                                            <input type="date" class="form-control" id="expense-date" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="expense-notes" class="form-label">Notes (Optional)</label>
+                                            <textarea class="form-control" id="expense-notes" rows="2"></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Total Amount</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">$</span>
+                                                <input type="text" class="form-control" id="expense-total-amount" readonly>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-success">Save Expense</button>
+                                        <button type="button" class="btn btn-secondary" id="cancel-expense-btn">Cancel</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Category</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+            
+            if (expenses.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="6" class="text-center">No expenses found. Add your first expense!</td>
+                    </tr>`;
+            } else {
+                // Sort expenses by date (newest first)
+                const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
                 
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Description</th>
-                                <th>Category</th>
-                                <th>Type</th>
-                                <th>Amount</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
-    
-    if (expenses.length === 0) {
-        html += `
-            <tr>
-                <td colspan="6" class="text-center">No expenses found. Add your first expense!</td>
-            </tr>`;
-    } else {
-        // Sort expenses by date (newest first)
-        const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        sortedExpenses.forEach(expense => {
-            const budgetType = getBudgetCategoryType(expense.category);
-            const taxInfo = expense.isTaxable ? 
-                `<small class="d-block text-muted">Includes ${expense.taxRate}% tax ($${expense.taxAmount.toFixed(2)})</small>` : '';
+                sortedExpenses.forEach(expense => {
+                    const budgetType = getBudgetCategoryType(expense.category);
+                    const taxInfo = expense.isTaxable ? 
+                        `<small class="d-block text-muted">Includes ${expense.taxRate}% tax ($${expense.taxAmount.toFixed(2)})</small>` : '';
+                    
+                    html += `
+                        <tr class="expense-item">
+                            <td>${expense.date}</td>
+                            <td>
+                                ${expense.description}
+                                ${taxInfo}
+                            </td>
+                            <td><span class="category-badge" style="background-color: ${getCategoryColor(expense.category)}; color: white;">${expense.category}</span></td>
+                            <td><span class="badge" style="background-color: ${getBudgetTypeColor(budgetType)};">${budgetType}</span></td>
+                            <td>${formatCurrency(expense.amount)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary edit-expense-btn" data-id="${expense.id}">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-id="${expense.id}">Delete</button>
+                            </td>
+                        </tr>`;
+                });
+            }
             
             html += `
-                <tr class="expense-item">
-                    <td>${expense.date}</td>
-                    <td>
-                        ${expense.description}
-                        ${taxInfo}
-                    </td>
-                    <td><span class="category-badge" style="background-color: ${getCategoryColor(expense.category)}; color: white;">${expense.category}</span></td>
-                    <td><span class="badge" style="background-color: ${getBudgetTypeColor(budgetType)};">${budgetType}</span></td>
-                    <td>${formatCurrency(expense.amount)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary edit-expense-btn" data-id="${expense.id}">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-id="${expense.id}">Delete</button>
-                    </td>
-                </tr>`;
-        });
-    }
-    
-    html += `
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>`;
-    
-    contentArea.innerHTML = html;
-    
-    // Set default date to today for new expenses
-    const today = new Date().toISOString().split('T')[0];
-    const dateInput = document.getElementById('expense-date');
-    if (dateInput) {
-        dateInput.value = today;
-    }
-    
-    // Add event listeners
-    document.getElementById('add-expense-btn').addEventListener('click', () => {
-        document.getElementById('expense-form-container').style.display = 'block';
-        document.getElementById('expense-form-title').textContent = 'Add New Expense';
-        document.getElementById('expense-form').reset();
-        document.getElementById('expense-date').value = today;
-    });
-    
-    document.getElementById('cancel-expense-btn').addEventListener('click', () => {
-        document.getElementById('expense-form-container').style.display = 'none';
-    });
-    
-    // Add event listeners for the tax functionality
-    setTimeout(() => {
-        const taxableCheckbox = document.getElementById('expense-taxable');
-        const taxOptions = document.getElementById('tax-options');
-        const amountInput = document.getElementById('expense-amount');
-        const taxRateInput = document.getElementById('expense-tax-rate');
-        const taxAmountDisplay = document.getElementById('expense-tax-amount');
-        const totalAmountDisplay = document.getElementById('expense-total-amount');
-        
-        // Function to calculate tax and total
-        function calculateTaxAndTotal() {
-            const amount = parseFloat(amountInput.value) || 0;
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
             
-            if (taxableCheckbox.checked) {
-                const taxRate = parseFloat(taxRateInput.value) || 0;
-                const taxAmount = amount * (taxRate / 100);
-                const totalAmount = amount + taxAmount;
-                
-                taxAmountDisplay.value = taxAmount.toFixed(2);
-                totalAmountDisplay.value = totalAmount.toFixed(2);
-            } else {
-                totalAmountDisplay.value = amount.toFixed(2);
+            contentArea.innerHTML = html;
+            
+            // Set default date to today for new expenses
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('expense-date');
+            if (dateInput) {
+                dateInput.value = today;
             }
-        }
-        
-        // Show/hide tax options when checkbox is clicked
-        if (taxableCheckbox) {
-            taxableCheckbox.addEventListener('change', function() {
-                if (this.checked) {
-                    taxOptions.style.display = 'flex';
-                } else {
-                    taxOptions.style.display = 'none';
-                }
-                calculateTaxAndTotal();
-            });
-        }
-        
-        // Update calculations when amount or tax rate changes
-        if (amountInput) {
-            amountInput.addEventListener('input', calculateTaxAndTotal);
-        }
-        
-        if (taxRateInput) {
-            taxRateInput.addEventListener('input', calculateTaxAndTotal);
-        }
-        
-        // Initialize total amount
-        if (amountInput && amountInput.value) {
-            calculateTaxAndTotal();
-        }
-    }, 100);
-    
-    // Update the form submission handler to include tax information
-    setTimeout(() => {
-        const expenseForm = document.getElementById('expense-form');
-        if (expenseForm) {
-            expenseForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                
-                const id = document.getElementById('expense-id').value;
-                const amount = parseFloat(document.getElementById('expense-amount').value);
-                const isTaxable = document.getElementById('expense-taxable').checked;
-                
-                let taxRate = 0;
-                let taxAmount = 0;
-                let totalAmount = amount;
-                
-                if (isTaxable) {
-                    taxRate = parseFloat(document.getElementById('expense-tax-rate').value);
-                    taxAmount = amount * (taxRate / 100);
-                    totalAmount = amount + taxAmount;
-                }
-                
-                const expense = {
-                    description: document.getElementById('expense-description').value,
-                    amount: totalAmount, // Save the total amount including tax
-                    baseAmount: amount, // Save the pre-tax amount
-                    isTaxable: isTaxable,
-                    taxRate: isTaxable ? taxRate : 0,
-                    taxAmount: isTaxable ? taxAmount : 0,
-                    category: document.getElementById('expense-category').value,
-                    date: document.getElementById('expense-date').value,
-                    notes: document.getElementById('expense-notes').value
-                };
-                
-                if (id) {
-                    // Update existing expense
-                    expense.id = parseInt(id);
-                    updateExpense(expense);
-                    loadExpensesView();
-                } else {
-                    // Add new expense
-                    saveExpense(expense);
-                }
-            });
-        }
-    }, 100);
-    
-    // Add event listeners to edit buttons
-    const editButtons = document.querySelectorAll('.edit-expense-btn');
-    editButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const id = parseInt(button.getAttribute('data-id'));
-            const expense = getExpenses().find(expense => expense.id === id);
             
-            if (expense) {
+            // Add event listeners
+            document.getElementById('add-expense-btn').addEventListener('click', () => {
                 document.getElementById('expense-form-container').style.display = 'block';
-                document.getElementById('expense-form-title').textContent = 'Edit Expense';
-                document.getElementById('expense-id').value = expense.id;
-                document.getElementById('expense-description').value = expense.description;
+                document.getElementById('expense-form-title').textContent = 'Add New Expense';
+                document.getElementById('expense-form').reset();
+                document.getElementById('expense-date').value = today;
+            });
+            
+            document.getElementById('cancel-expense-btn').addEventListener('click', () => {
+                document.getElementById('expense-form-container').style.display = 'none';
+            });
+            
+            // Add event listeners for the tax functionality
+            setTimeout(() => {
+                const taxableCheckbox = document.getElementById('expense-taxable');
+                const taxOptions = document.getElementById('tax-options');
+                const amountInput = document.getElementById('expense-amount');
+                const taxRateInput = document.getElementById('expense-tax-rate');
+                const taxAmountDisplay = document.getElementById('expense-tax-amount');
+                const totalAmountDisplay = document.getElementById('expense-total-amount');
                 
-                // Set the base amount if available, otherwise use the total amount
-                document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
-                
-                // Set tax information if available
-                if (expense.isTaxable) {
-                    document.getElementById('expense-taxable').checked = true;
-                    document.getElementById('tax-options').style.display = 'flex';
-                    document.getElementById('expense-tax-rate').value = expense.taxRate || 0;
-                    document.getElementById('expense-tax-amount').value = expense.taxAmount || 0;
-                    document.getElementById('expense-total-amount').value = expense.amount;
-                } else {
-                    document.getElementById('expense-taxable').checked = false;
-                    document.getElementById('tax-options').style.display = 'none';
-                    document.getElementById('expense-total-amount').value = expense.amount;
+                // Function to calculate tax and total
+                function calculateTaxAndTotal() {
+                    const amount = parseFloat(amountInput.value) || 0;
+                    
+                    if (taxableCheckbox.checked) {
+                        const taxRate = parseFloat(taxRateInput.value) || 0;
+                        const taxAmount = amount * (taxRate / 100);
+                        const totalAmount = amount + taxAmount;
+                        
+                        taxAmountDisplay.value = taxAmount.toFixed(2);
+                        totalAmountDisplay.value = totalAmount.toFixed(2);
+                    } else {
+                        totalAmountDisplay.value = amount.toFixed(2);
+                    }
                 }
                 
-                document.getElementById('expense-category').value = expense.category;
-                document.getElementById('expense-date').value = expense.date;
-                document.getElementById('expense-notes').value = expense.notes || '';
-            }
-        });
-    });
-    
-    // Add event listeners to delete buttons
-    const deleteButtons = document.querySelectorAll('.delete-expense-btn');
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            if (confirm('Are you sure you want to delete this expense?')) {
-                const id = parseInt(button.getAttribute('data-id'));
-                deleteExpense(id);
-                loadExpensesView();
-            }
-        });
-    });
+                // Show/hide tax options when checkbox is clicked
+                if (taxableCheckbox) {
+                    taxableCheckbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            taxOptions.style.display = 'flex';
+                        } else {
+                            taxOptions.style.display = 'none';
+                        }
+                        calculateTaxAndTotal();
+                    });
+                }
+                
+                // Update calculations when amount or tax rate changes
+                if (amountInput) {
+                    amountInput.addEventListener('input', calculateTaxAndTotal);
+                }
+                
+                if (taxRateInput) {
+                    taxRateInput.addEventListener('input', calculateTaxAndTotal);
+                }
+                
+                // Initialize total amount
+                if (amountInput && amountInput.value) {
+                    calculateTaxAndTotal();
+                }
+            }, 100);
+            
+            // Update the form submission handler to include tax information
+            setTimeout(() => {
+                const expenseForm = document.getElementById('expense-form');
+                if (expenseForm) {
+                    expenseForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        
+                        const id = document.getElementById('expense-id').value;
+                        const amount = parseFloat(document.getElementById('expense-amount').value);
+                        const isTaxable = document.getElementById('expense-taxable').checked;
+                        
+                        let taxRate = 0;
+                        let taxAmount = 0;
+                        let totalAmount = amount;
+                        
+                        if (isTaxable) {
+                            taxRate = parseFloat(document.getElementById('expense-tax-rate').value);
+                            taxAmount = amount * (taxRate / 100);
+                            totalAmount = amount + taxAmount;
+                        }
+                        
+                        const expense = {
+                            description: document.getElementById('expense-description').value,
+                            amount: totalAmount, // Save the total amount including tax
+                            baseAmount: amount, // Save the pre-tax amount
+                            isTaxable: isTaxable,
+                            taxRate: isTaxable ? taxRate : 0,
+                            taxAmount: isTaxable ? taxAmount : 0,
+                            category: document.getElementById('expense-category').value,
+                            date: document.getElementById('expense-date').value,
+                            notes: document.getElementById('expense-notes').value
+                        };
+                        
+                        if (id) {
+                            // Update existing expense
+                            expense.id = parseInt(id);
+                            await saveExpense(expense);
+                        } else {
+                            // Add new expense
+                            await saveExpense(expense);
+                        }
+                        
+                        // Reload expenses view
+                        loadExpensesView();
+                    });
+                }
+            }, 100);
+            
+            // Add event listeners to edit buttons
+            const editButtons = document.querySelectorAll('.edit-expense-btn');
+            editButtons.forEach(button => {
+                button.addEventListener('click', async () => {
+                    const id = parseInt(button.getAttribute('data-id'));
+                    const expensesList = await getExpenses();
+                    const expense = expensesList.find(expense => expense.id === id);
+                    
+                    if (expense) {
+                        document.getElementById('expense-form-container').style.display = 'block';
+                        document.getElementById('expense-form-title').textContent = 'Edit Expense';
+                        document.getElementById('expense-id').value = expense.id;
+                        document.getElementById('expense-description').value = expense.description;
+                        document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
+                        document.getElementById('expense-taxable').checked = expense.isTaxable || false;
+                        
+                        if (expense.isTaxable) {
+                            document.getElementById('tax-options').style.display = 'flex';
+                            document.getElementById('expense-tax-rate').value = expense.taxRate;
+                            document.getElementById('expense-tax-amount').value = expense.taxAmount.toFixed(2);
+                            document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                        } else {
+                            document.getElementById('tax-options').style.display = 'none';
+                            document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                        }
+                        
+                        document.getElementById('expense-category').value = expense.category;
+                        document.getElementById('expense-date').value = expense.date;
+                        document.getElementById('expense-notes').value = expense.notes || '';
+                    }
+                });
+            });
+            
+            // Add event listeners to delete buttons
+            const deleteButtons = document.querySelectorAll('.delete-expense-btn');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', async () => {
+                    if (confirm('Are you sure you want to delete this expense?')) {
+                        const id = parseInt(button.getAttribute('data-id'));
+                        await deleteExpense(id);
+                        loadExpensesView();
+                    }
+                });
+            });
+            
+        } catch (error) {
+            clearTimeout(loadingTimeout);
+            console.error("Error loading expenses view:", error);
+            showError(`Error loading expenses: ${error.message}`);
+        }
+    })();
 }
 
 function loadIncomeView() {
     showLoading();
     
-    const incomeList = getIncome();
+    // Add a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        showError("Income loading timed out. Please refresh the page.");
+    }, 10000);
     
-    let html = `
-        <div class="card">
-            <div class="card-header">Budget Buddy Income</div>
-            <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-12">
-                        <button class="btn btn-success" id="add-income-btn">Add New Income</button>
-                    </div>
-                </div>
+    // Wrap in async function to properly handle promises
+    (async function() {
+        try {
+            const incomeList = await getIncome();
+            clearTimeout(loadingTimeout);
+            
+            // Log data for debugging
+            console.log("Loaded income:", incomeList);
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">Budget Buddy Income</div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <button class="btn btn-success" id="add-income-btn">Add New Income</button>
+                            </div>
+                        </div>
+                        
+                        <div id="income-form-container" class="mb-4" style="display: none;">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 id="income-form-title">Add New Income</h5>
+                                    <form id="income-form">
+                                        <input type="hidden" id="income-id">
+                                        <div class="mb-3">
+                                            <label for="income-description" class="form-label">Description</label>
+                                            <input type="text" class="form-control" id="income-description" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="income-amount" class="form-label">Amount</label>
+                                            <input type="number" class="form-control" id="income-amount" step="0.01" min="0.01" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="income-source" class="form-label">Source</label>
+                                            <select class="form-select" id="income-source" required>
+                                                <option value="">Select a source</option>
+                                                <option value="Salary">Salary</option>
+                                                <option value="Freelance">Freelance</option>
+                                                <option value="Business">Business</option>
+                                                <option value="Investments">Investments</option>
+                                                <option value="Gifts">Gifts</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="income-date" class="form-label">Date</label>
+                                            <input type="date" class="form-control" id="income-date" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="income-notes" class="form-label">Notes (Optional)</label>
+                                            <textarea class="form-control" id="income-notes" rows="2"></textarea>
+                                        </div>
+                                        <button type="submit" class="btn btn-success">Save Income</button>
+                                        <button type="button" class="btn btn-secondary" id="cancel-income-btn">Cancel</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Source</th>
+                                        <th>Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+            
+            if (incomeList.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="5" class="text-center">No income entries found. Add your first income!</td>
+                    </tr>`;
+            } else {
+                // Sort income by date (newest first)
+                const sortedIncome = [...incomeList].sort((a, b) => new Date(b.date) - new Date(a.date));
                 
-                <div id="income-form-container" class="mb-4" style="display: none;">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 id="income-form-title">Add New Income</h5>
-                            <form id="income-form">
-                                <input type="hidden" id="income-id">
-                                <div class="mb-3">
-                                    <label for="income-description" class="form-label">Description</label>
-                                    <input type="text" class="form-control" id="income-description" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="income-amount" class="form-label">Amount</label>
-                                    <input type="number" class="form-control" id="income-amount" step="0.01" min="0.01" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="income-source" class="form-label">Source</label>
-                                    <select class="form-select" id="income-source" required>
-                                        <option value="">Select a source</option>
-                                        <option value="Salary">Salary</option>
-                                        <option value="Freelance">Freelance</option>
-                                        <option value="Business">Business</option>
-                                        <option value="Investments">Investments</option>
-                                        <option value="Gifts">Gifts</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="income-date" class="form-label">Date</label>
-                                    <input type="date" class="form-control" id="income-date" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="income-notes" class="form-label">Notes (Optional)</label>
-                                    <textarea class="form-control" id="income-notes" rows="2"></textarea>
-                                </div>
-                                <button type="submit" class="btn btn-success">Save Income</button>
-                                <button type="button" class="btn btn-secondary" id="cancel-income-btn">Cancel</button>
-                            </form>
+                sortedIncome.forEach(income => {
+                    html += `
+                        <tr class="income-item">
+                            <td>${income.date}</td>
+                            <td>${income.description}</td>
+                            <td><span class="badge bg-success">${income.source}</span></td>
+                            <td class="text-success">${formatCurrency(income.amount)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary edit-income-btn" data-id="${income.id}">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger delete-income-btn" data-id="${income.id}">Delete</button>
+                            </td>
+                        </tr>`;
+                });
+            }
+            
+            html += `
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
-                
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Description</th>
-                                <th>Source</th>
-                                <th>Amount</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
-    
-    if (incomeList.length === 0) {
-        html += `
-            <tr>
-                <td colspan="5" class="text-center">No income entries found. Add your first income!</td>
-            </tr>`;
-    } else {
-        // Sort income by date (newest first)
-        const sortedIncome = [...incomeList].sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        sortedIncome.forEach(income => {
-            html += `
-                <tr class="income-item">
-                    <td>${income.date}</td>
-                    <td>${income.description}</td>
-                    <td><span class="badge bg-success">${income.source}</span></td>
-                    <td class="text-success">${formatCurrency(income.amount)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary edit-income-btn" data-id="${income.id}">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger delete-income-btn" data-id="${income.id}">Delete</button>
-                    </td>
-                </tr>`;
-        });
-    }
-    
-    html += `
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>`;
-    
-    contentArea.innerHTML = html;
-    
-    // Set default date to today for new income
-    const today = new Date().toISOString().split('T')[0];
-    const dateInput = document.getElementById('income-date');
-    if (dateInput) {
-        dateInput.value = today;
-    }
-    
-    // Add event listeners
-    document.getElementById('add-income-btn').addEventListener('click', () => {
-        document.getElementById('income-form-container').style.display = 'block';
-        document.getElementById('income-form-title').textContent = 'Add New Income';
-        document.getElementById('income-form').reset();
-        document.getElementById('income-date').value = today;
-    });
-    
-    document.getElementById('cancel-income-btn').addEventListener('click', () => {
-        document.getElementById('income-form-container').style.display = 'none';
-    });
-    
-    document.getElementById('income-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        const id = document.getElementById('income-id').value;
-        const income = {
-            description: document.getElementById('income-description').value,
-            amount: parseFloat(document.getElementById('income-amount').value),
-            source: document.getElementById('income-source').value,
-            date: document.getElementById('income-date').value,
-            notes: document.getElementById('income-notes').value
-        };
-        
-        if (id) {
-            // Update existing income
-            income.id = parseInt(id);
-            updateIncome(income);
-        } else {
-            // Add new income
-            saveIncome(income);
-        }
-        
-        // Reload income view
-        loadIncomeView();
-    });
-    
-    // Add event listeners to edit buttons
-    const editButtons = document.querySelectorAll('.edit-income-btn');
-    editButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const id = parseInt(button.getAttribute('data-id'));
-            const income = getIncome().find(income => income.id === id);
+                </div>`;
             
-            if (income) {
+            contentArea.innerHTML = html;
+            
+            // Set default date to today for new income
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('income-date');
+            if (dateInput) {
+                dateInput.value = today;
+            }
+            
+            // Add event listeners
+            document.getElementById('add-income-btn').addEventListener('click', () => {
                 document.getElementById('income-form-container').style.display = 'block';
-                document.getElementById('income-form-title').textContent = 'Edit Income';
-                document.getElementById('income-id').value = income.id;
-                document.getElementById('income-description').value = income.description;
-                document.getElementById('income-amount').value = income.amount;
-                document.getElementById('income-source').value = income.source;
-                document.getElementById('income-date').value = income.date;
-                document.getElementById('income-notes').value = income.notes || '';
-            }
-        });
-    });
-    
-    // Add event listeners to delete buttons
-    const deleteButtons = document.querySelectorAll('.delete-income-btn');
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            if (confirm('Are you sure you want to delete this income entry?')) {
-                const id = parseInt(button.getAttribute('data-id'));
-                deleteIncome(id);
+                document.getElementById('income-form-title').textContent = 'Add New Income';
+                document.getElementById('income-form').reset();
+                document.getElementById('income-date').value = today;
+            });
+            
+            document.getElementById('cancel-income-btn').addEventListener('click', () => {
+                document.getElementById('income-form-container').style.display = 'none';
+            });
+            
+            document.getElementById('income-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const id = document.getElementById('income-id').value;
+                const income = {
+                    description: document.getElementById('income-description').value,
+                    amount: parseFloat(document.getElementById('income-amount').value),
+                    source: document.getElementById('income-source').value,
+                    date: document.getElementById('income-date').value,
+                    notes: document.getElementById('income-notes').value
+                };
+                
+                if (id) {
+                    // Update existing income
+                    income.id = parseInt(id);
+                    await updateIncome(income);
+                } else {
+                    // Add new income
+                    await saveIncome(income);
+                }
+                
+                // Reload income view
                 loadIncomeView();
-            }
-        });
-    });
+            });
+            
+            // Add event listeners to edit buttons
+            const editButtons = document.querySelectorAll('.edit-income-btn');
+            editButtons.forEach(button => {
+                button.addEventListener('click', async () => {
+                    const id = parseInt(button.getAttribute('data-id'));
+                    const incomeList = await getIncome();
+                    const income = incomeList.find(income => income.id === id);
+                    
+                    if (income) {
+                        document.getElementById('income-form-container').style.display = 'block';
+                        document.getElementById('income-form-title').textContent = 'Edit Income';
+                        document.getElementById('income-id').value = income.id;
+                        document.getElementById('income-description').value = income.description;
+                        document.getElementById('income-amount').value = income.amount;
+                        document.getElementById('income-source').value = income.source;
+                        document.getElementById('income-date').value = income.date;
+                        document.getElementById('income-notes').value = income.notes || '';
+                    }
+                });
+            });
+            
+            // Add event listeners to delete buttons
+            const deleteButtons = document.querySelectorAll('.delete-income-btn');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', async () => {
+                    if (confirm('Are you sure you want to delete this income entry?')) {
+                        const id = parseInt(button.getAttribute('data-id'));
+                        await deleteIncome(id);
+                        loadIncomeView();
+                    }
+                });
+            });
+            
+        } catch (error) {
+            clearTimeout(loadingTimeout);
+            console.error("Error loading income view:", error);
+            showError(`Error loading income: ${error.message}`);
+        }
+    })();
 }
 
 function loadBudgetView() {
@@ -1251,8 +1475,8 @@ function loadBudgetView() {
             });
         }
 
-// Initialize the dashboard
-function initDashboard() {
+// Update the initApp function to clear local storage when logged in
+async function initApp() {
     // Add active class to navigation links
     navLinks.forEach(link => {
         link.addEventListener('click', function() {
@@ -1261,12 +1485,44 @@ function initDashboard() {
         });
     });
     
-    // Load dashboard view by default
-    loadDashboardView();
+    try {
+        // Check if user is logged in
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // User is logged in, clear local storage to avoid data confusion
+            clearLocalStorageData();
+            
+            // Load dashboard
+            document.getElementById('nav-dashboard').classList.add('active');
+            loadDashboardView();
+        } else {
+            // User is not logged in, show auth view
+            loadAuthView();
+        }
+        
+        // Listen for auth state changes
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN') {
+                // Clear local storage when signing in
+                clearLocalStorageData();
+                
+                document.getElementById('nav-dashboard').classList.add('active');
+                loadDashboardView();
+            } else if (event === 'SIGNED_OUT') {
+                loadAuthView();
+            }
+        });
+    } catch (error) {
+        console.error('Authentication error:', error);
+        // If there's an error with Supabase, fall back to local storage mode
+        document.getElementById('nav-dashboard').classList.add('active');
+        loadDashboardView();
+    }
 }
 
 // Start the application
-initDashboard();
+initApp();
 
 // Simplify the expense saving function
 function saveExpense(expense) {
@@ -1281,4 +1537,192 @@ function saveExpense(expense) {
     }
     
     return true;
+}
+
+// Add this function to your app.js
+function loadAuthView() {
+    let html = `
+        <div class="card">
+            <div class="card-header">Budget Buddy Authentication</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Sign In</h5>
+                        <form id="login-form">
+                            <div class="mb-3">
+                                <label for="login-email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="login-email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="login-password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="login-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Sign In</button>
+                        </form>
+                        <div id="login-error" class="text-danger mt-2"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Sign Up</h5>
+                        <form id="signup-form">
+                            <div class="mb-3">
+                                <label for="signup-email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="signup-email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="signup-password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="signup-password" required minlength="6">
+                            </div>
+                            <button type="submit" class="btn btn-success">Sign Up</button>
+                        </form>
+                        <div id="signup-error" class="text-danger mt-2"></div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <button id="migrate-data-btn" class="btn btn-warning">Migrate Local Data to Supabase</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    contentArea.innerHTML = html;
+    
+    // Add event listeners
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+    document.getElementById('signup-form').addEventListener('submit', handleSignup);
+    document.getElementById('migrate-data-btn').addEventListener('click', migrateLocalDataToSupabase);
+}
+
+// Add authentication handlers
+async function handleSignup(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('signup-email').value;
+    const password = document.getElementById('signup-password').value;
+    const errorElement = document.getElementById('signup-error');
+    
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+        });
+        
+        if (error) throw error;
+        
+        errorElement.textContent = 'Check your email for the confirmation link!';
+        errorElement.className = 'text-success mt-2';
+    } catch (error) {
+        errorElement.textContent = error.message;
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errorElement = document.getElementById('login-error');
+    
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password,
+        });
+        
+        if (error) throw error;
+        
+        // Redirect to dashboard on successful login
+        loadDashboardView();
+    } catch (error) {
+        errorElement.textContent = error.message;
+    }
+}
+
+// Add migration function
+async function migrateLocalDataToSupabase() {
+    // Check if user is logged in
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    
+    if (!user) {
+        alert('Please sign in first to migrate your data');
+        return;
+    }
+    
+    try {
+        // Show migration status
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'alert alert-info mt-3';
+        statusDiv.textContent = 'Migration in progress...';
+        document.querySelector('.card-body').appendChild(statusDiv);
+        
+        // Migrate expenses
+        const expenses = JSON.parse(localStorage.getItem(EXPENSES_KEY) || '[]');
+        if (expenses.length > 0) {
+            statusDiv.textContent = 'Migrating expenses...';
+            
+            // Add user_id to each expense
+            const formattedExpenses = expenses.map(expense => ({
+                ...expense,
+                user_id: user.id,
+                id: undefined // Let Supabase generate new IDs
+            }));
+            
+            const { error: expensesError } = await supabaseClient
+                .from('expenses')
+                .insert(formattedExpenses);
+            
+            if (expensesError) throw new Error(`Error migrating expenses: ${expensesError.message}`);
+        }
+        
+        // Migrate income
+        const income = JSON.parse(localStorage.getItem(INCOME_KEY) || '[]');
+        if (income.length > 0) {
+            statusDiv.textContent = 'Migrating income...';
+            
+            const formattedIncome = income.map(item => ({
+                ...item,
+                user_id: user.id,
+                id: undefined
+            }));
+            
+            const { error: incomeError } = await supabaseClient
+                .from('income')
+                .insert(formattedIncome);
+            
+            if (incomeError) throw new Error(`Error migrating income: ${incomeError.message}`);
+        }
+        
+        // Migrate budget
+        const budget = JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}');
+        if (Object.keys(budget).length > 0) {
+            statusDiv.textContent = 'Migrating budget...';
+            
+            const formattedBudget = {
+                user_id: user.id,
+                total: budget.total || 0,
+                needs_percentage: budget.allocation?.Needs || 50,
+                wants_percentage: budget.allocation?.Wants || 30,
+                savings_percentage: budget.allocation?.Savings || 20,
+                category_budgets: budget.categories || {}
+            };
+            
+            const { error: budgetError } = await supabaseClient
+                .from('budgets')
+                .insert([formattedBudget]);
+            
+            if (budgetError) throw new Error(`Error migrating budget: ${budgetError.message}`);
+        }
+        
+        statusDiv.className = 'alert alert-success mt-3';
+        statusDiv.textContent = 'Migration complete! Your data is now stored in Supabase.';
+    } catch (error) {
+        console.error('Migration error:', error);
+        const statusDiv = document.querySelector('.alert') || document.createElement('div');
+        statusDiv.className = 'alert alert-danger mt-3';
+        statusDiv.textContent = `Migration failed: ${error.message}`;
+        if (!statusDiv.parentNode) {
+            document.querySelector('.card-body').appendChild(statusDiv);
+        }
+    }
 } 
