@@ -209,10 +209,10 @@ async function deleteExpense(id) {
         
         console.log('Deleting expense with ID:', id);
         
-        // Delete from Supabase
-        const { error } = await supabaseClient
+        // Delete from Supabase - make sure we're using the correct ID format
+        const { error, count } = await supabaseClient
             .from('expenses')
-            .delete()
+            .delete({ returning: 'minimal', count: 'exact' })
             .eq('id', id);
         
         if (error) {
@@ -220,7 +220,7 @@ async function deleteExpense(id) {
             throw error;
         }
         
-        console.log('Expense deleted successfully');
+        console.log(`Deleted ${count} expense(s) with ID: ${id}`);
         
         // If we're on the expenses view, refresh it
         if (document.querySelector('#nav-expenses').classList.contains('active')) {
@@ -330,13 +330,20 @@ async function deleteIncome(id) {
         
         if (!user) return false;
         
-        // Delete from Supabase
-        const { error } = await supabaseClient
+        console.log('Deleting income with ID:', id);
+        
+        // Delete from Supabase - make sure we're using the correct ID format
+        const { error, count } = await supabaseClient
             .from('income')
-            .delete()
+            .delete({ returning: 'minimal', count: 'exact' })
             .eq('id', id);
         
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase delete error:', error);
+            throw error;
+        }
+        
+        console.log(`Deleted ${count} income(s) with ID: ${id}`);
         
         // If we're on the income view, refresh it
         if (document.querySelector('#nav-income').classList.contains('active')) {
@@ -346,6 +353,7 @@ async function deleteIncome(id) {
         return true;
     } catch (error) {
         console.error('Error deleting income:', error);
+        alert(`Error deleting income: ${error.message}`);
         return false;
     }
 }
@@ -1096,10 +1104,20 @@ function loadExpensesView() {
             deleteButtons.forEach(button => {
                 button.addEventListener('click', async () => {
                     if (confirm('Are you sure you want to delete this expense?')) {
-                        // Don't parse as integer - keep as UUID string
-                        const id = button.getAttribute('data-id');
-                        await deleteExpense(id);
-                        // No need to call loadExpensesView() again as deleteExpense already does this
+                        try {
+                            const id = button.getAttribute('data-id');
+                            console.log('Attempting to delete expense with ID:', id);
+                            const success = await deleteExpense(id);
+                            
+                            if (success) {
+                                alert('Expense deleted successfully!');
+                                // Force refresh the view
+                                loadExpensesView();
+                            }
+                        } catch (error) {
+                            console.error('Error in delete button handler:', error);
+                            alert(`Failed to delete expense: ${error.message}`);
+                        }
                     }
                 });
             });
@@ -1296,9 +1314,20 @@ function loadIncomeView() {
             deleteButtons.forEach(button => {
                 button.addEventListener('click', async () => {
                     if (confirm('Are you sure you want to delete this income entry?')) {
-                        const id = parseInt(button.getAttribute('data-id'));
-                        await deleteIncome(id);
-                        loadIncomeView();
+                        try {
+                            const id = button.getAttribute('data-id');
+                            console.log('Attempting to delete income with ID:', id);
+                            const success = await deleteIncome(id);
+                            
+                            if (success) {
+                                alert('Income deleted successfully!');
+                                // Force refresh the view
+                                loadIncomeView();
+                            }
+                        } catch (error) {
+                            console.error('Error in delete button handler:', error);
+                            alert(`Failed to delete income: ${error.message}`);
+                        }
                     }
                 });
             });
