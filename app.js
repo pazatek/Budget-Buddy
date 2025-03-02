@@ -7,6 +7,22 @@ const EXPENSES_KEY = 'expenses';
 const INCOME_KEY = 'income';
 const BUDGET_KEY = 'budget';
 
+// Budget Categories
+const BUDGET_CATEGORIES = {
+    'Food': 'Needs',
+    'Transportation': 'Needs',
+    'Housing': 'Needs',
+    'Entertainment': 'Wants',
+    'Utilities': 'Needs',
+    'Healthcare': 'Needs',
+    'Shopping': 'Wants',
+    'Education': 'Needs',
+    'Travel': 'Wants',
+    'Investments': 'Savings',
+    'Savings': 'Savings',
+    'Other': 'Wants'
+};
+
 // DOM Elements
 const contentArea = document.getElementById('content-area');
 const navLinks = document.querySelectorAll('.nav-link');
@@ -58,6 +74,20 @@ function getCategoryColor(category) {
     };
     
     return categoryColors[category] || getRandomColor();
+}
+
+function getBudgetCategoryType(category) {
+    return BUDGET_CATEGORIES[category] || 'Wants';
+}
+
+function getBudgetTypeColor(type) {
+    const typeColors = {
+        'Needs': '#36A2EB',  // Blue
+        'Wants': '#FF6384',  // Red
+        'Savings': '#4BC0C0' // Green
+    };
+    
+    return typeColors[type] || '#808080';
 }
 
 // API Functions
@@ -217,7 +247,12 @@ function getBudget() {
     const budget = localStorage.getItem(BUDGET_KEY);
     return budget ? JSON.parse(budget) : {
         total: 0,
-        categories: {}
+        categories: {},
+        allocation: {
+            Needs: 50,
+            Wants: 30,
+            Savings: 20
+        }
     };
 }
 
@@ -249,6 +284,18 @@ function loadDashboardView() {
                 }
                 categoryTotals[expense.category] += parseFloat(expense.amount);
             });
+            
+            // Calculate budget type totals (Needs, Wants, Savings)
+            const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
+            const typeCategories = { Needs: [], Wants: [], Savings: [] };
+            
+            Object.keys(categoryTotals).forEach(category => {
+                const type = getBudgetCategoryType(category);
+                typeTotals[type] += categoryTotals[category];
+                typeCategories[type].push(category);
+            });
+            
+            const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
             
             // Get recent transactions
             const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
@@ -346,6 +393,58 @@ function loadDashboardView() {
             html += `
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            // Add budget allocation section to dashboard
+            html += `
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h5>Budget Allocation</h5>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card" style="border-color: ${getBudgetTypeColor('Needs')};">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Needs (${budget.allocation.Needs}%)</h6>
+                                        <p class="card-text">Essential expenses like housing, food, utilities, and healthcare.</p>
+                                        <div class="progress">
+                                            <div class="progress-bar" 
+                                                style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
+                                                ${formatCurrency(typeTotals.Needs)} / ${formatCurrency(budget.total * budget.allocation.Needs / 100)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card" style="border-color: ${getBudgetTypeColor('Wants')};">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Wants (${budget.allocation.Wants}%)</h6>
+                                        <p class="card-text">Non-essential expenses like entertainment, dining out, and shopping.</p>
+                                        <div class="progress">
+                                            <div class="progress-bar" 
+                                                style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
+                                                ${formatCurrency(typeTotals.Wants)} / ${formatCurrency(budget.total * budget.allocation.Wants / 100)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card" style="border-color: ${getBudgetTypeColor('Savings')};">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Savings (${budget.allocation.Savings}%)</h6>
+                                        <p class="card-text">Money set aside for future goals, investments, and emergencies.</p>
+                                        <div class="progress">
+                                            <div class="progress-bar" 
+                                                style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
+                                                ${formatCurrency(typeTotals.Savings)} / ${formatCurrency(budget.total * budget.allocation.Savings / 100)}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -454,6 +553,7 @@ function loadExpensesView() {
                                 <th>Date</th>
                                 <th>Description</th>
                                 <th>Category</th>
+                                <th>Type</th>
                                 <th>Amount</th>
                                 <th>Market Context</th>
                                 <th>Actions</th>
@@ -471,11 +571,13 @@ function loadExpensesView() {
         const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
         
         sortedExpenses.forEach(expense => {
+            const budgetType = getBudgetCategoryType(expense.category);
             html += `
                 <tr class="expense-item">
                     <td>${expense.date}</td>
                     <td>${expense.description}</td>
                     <td><span class="category-badge" style="background-color: ${getCategoryColor(expense.category)}; color: white;">${expense.category}</span></td>
+                    <td><span class="badge" style="background-color: ${getBudgetTypeColor(budgetType)};">${budgetType}</span></td>
                     <td>${formatCurrency(expense.amount)}</td>
                     <td>${expense.marketContext ? expense.marketContext.marketData : 'N/A'}</td>
                     <td>
@@ -605,6 +707,311 @@ function loadExpensesView() {
                 deleteExpense(id);
             }
         });
+    });
+}
+
+function loadBudgetView() {
+    showLoading();
+    
+    const budget = getBudget();
+    const expenses = getExpenses();
+    
+    // Calculate category totals
+    const categoryTotals = {};
+    expenses.forEach(expense => {
+        if (!categoryTotals[expense.category]) {
+            categoryTotals[expense.category] = 0;
+        }
+        categoryTotals[expense.category] += parseFloat(expense.amount);
+    });
+    
+    // Calculate budget type totals (Needs, Wants, Savings)
+    const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
+    const typeCategories = { Needs: [], Wants: [], Savings: [] };
+    
+    Object.keys(categoryTotals).forEach(category => {
+        const type = getBudgetCategoryType(category);
+        typeTotals[type] += categoryTotals[category];
+        typeCategories[type].push(category);
+    });
+    
+    const totalExpenses = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
+    
+    let html = `
+        <div class="card">
+            <div class="card-header">Budget Buddy Budget</div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h4>Budget Allocation</h4>
+                        <p>Set your budget allocation percentages for Needs, Wants, and Savings using the 50/30/20 rule or your own custom allocation.</p>
+                        
+                        <form id="budget-allocation-form" class="mb-4">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="needs-percentage" class="form-label">Needs (%)</label>
+                                        <input type="number" class="form-control" id="needs-percentage" min="0" max="100" value="${budget.allocation.Needs}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="wants-percentage" class="form-label">Wants (%)</label>
+                                        <input type="number" class="form-control" id="wants-percentage" min="0" max="100" value="${budget.allocation.Wants}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="savings-percentage" class="form-label">Savings (%)</label>
+                                        <input type="number" class="form-control" id="savings-percentage" min="0" max="100" value="${budget.allocation.Savings}" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="total-budget" class="form-label">Total Monthly Budget</label>
+                                <input type="number" class="form-control" id="total-budget" min="0" step="0.01" value="${budget.total}" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Budget Allocation</button>
+                            <button type="button" id="reset-budget-btn" class="btn btn-outline-secondary">Reset to 50/30/20</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>Budget Allocation</h5>
+                        <div class="chart-container">
+                            <canvas id="allocation-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Current Spending</h5>
+                        <div class="chart-container">
+                            <canvas id="spending-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5>Budget vs. Actual Spending</h5>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Type</th>
+                                        <th>Budget</th>
+                                        <th>Actual</th>
+                                        <th>Difference</th>
+                                        <th>Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+    
+    // Add budget type rows
+    ['Needs', 'Wants', 'Savings'].forEach(type => {
+        const typePercentage = budget.allocation[type];
+        const typeBudget = (budget.total * typePercentage / 100);
+        const typeActual = typeTotals[type];
+        const difference = typeBudget - typeActual;
+        const percentage = typeBudget > 0 ? (typeActual / typeBudget * 100) : 0;
+        
+        html += `
+            <tr class="table-active">
+                <td><strong>${type}</strong></td>
+                <td></td>
+                <td>${formatCurrency(typeBudget)}</td>
+                <td>${formatCurrency(typeActual)}</td>
+                <td class="${difference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(difference)}</td>
+                <td>
+                    <div class="progress">
+                        <div class="progress-bar ${percentage <= 100 ? 'bg-success' : 'bg-danger'}" 
+                            role="progressbar" 
+                            style="width: ${Math.min(percentage, 100)}%" 
+                            aria-valuenow="${typeActual}" 
+                            aria-valuemin="0" 
+                            aria-valuemax="${typeBudget}">
+                            ${percentage.toFixed(0)}%
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        
+        // Add category rows for this type
+        typeCategories[type].forEach(category => {
+            const categoryBudget = budget.categories[category] || 0;
+            const categoryActual = categoryTotals[category] || 0;
+            const catDifference = categoryBudget - categoryActual;
+            const catPercentage = categoryBudget > 0 ? (categoryActual / categoryBudget * 100) : 0;
+            
+            html += `
+                <tr>
+                    <td class="ps-4">${category}</td>
+                    <td><span class="badge" style="background-color: ${getBudgetTypeColor(type)};">${type}</span></td>
+                    <td>${formatCurrency(categoryBudget)}</td>
+                    <td>${formatCurrency(categoryActual)}</td>
+                    <td class="${catDifference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(catDifference)}</td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar ${catPercentage <= 100 ? 'bg-success' : 'bg-danger'}" 
+                                role="progressbar" 
+                                style="width: ${Math.min(catPercentage, 100)}%" 
+                                aria-valuenow="${categoryActual}" 
+                                aria-valuemin="0" 
+                                aria-valuemax="${categoryBudget}">
+                                ${catPercentage.toFixed(0)}%
+                            </div>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+    });
+    
+    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h5>Category Budget Settings</h5>
+                        <form id="category-budget-form">
+                            <div class="row">`;
+    
+    // Add inputs for each expense category
+    Object.keys(BUDGET_CATEGORIES).forEach(category => {
+        const type = BUDGET_CATEGORIES[category];
+        html += `
+            <div class="col-md-4 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor(type)}; color: white;">${category}</span>
+                    <input type="number" class="form-control category-budget" 
+                        data-category="${category}" 
+                        min="0" 
+                        step="0.01" 
+                        value="${budget.categories[category] || 0}">
+                </div>
+                <small class="text-muted">${type}</small>
+            </div>`;
+    });
+    
+    html += `
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Category Budgets</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    contentArea.innerHTML = html;
+    
+    // Create allocation chart
+    const allocationCtx = document.getElementById('allocation-chart').getContext('2d');
+    new Chart(allocationCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Needs', 'Wants', 'Savings'],
+            datasets: [{
+                data: [budget.allocation.Needs, budget.allocation.Wants, budget.allocation.Savings],
+                backgroundColor: [
+                    getBudgetTypeColor('Needs'),
+                    getBudgetTypeColor('Wants'),
+                    getBudgetTypeColor('Savings')
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Budget Allocation'
+                }
+            }
+        }
+    });
+    
+    // Create spending chart
+    const spendingCtx = document.getElementById('spending-chart').getContext('2d');
+    new Chart(spendingCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Needs', 'Wants', 'Savings'],
+            datasets: [{
+                data: [typeTotals.Needs, typeTotals.Wants, typeTotals.Savings],
+                backgroundColor: [
+                    getBudgetTypeColor('Needs'),
+                    getBudgetTypeColor('Wants'),
+                    getBudgetTypeColor('Savings')
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Current Spending'
+                }
+            }
+        }
+    });
+    
+    // Add event listeners
+    document.getElementById('budget-allocation-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const needsPercentage = parseInt(document.getElementById('needs-percentage').value);
+        const wantsPercentage = parseInt(document.getElementById('wants-percentage').value);
+        const savingsPercentage = parseInt(document.getElementById('savings-percentage').value);
+        
+        // Validate that percentages add up to 100
+        if (needsPercentage + wantsPercentage + savingsPercentage !== 100) {
+            alert('Percentages must add up to 100%');
+            return;
+        }
+        
+        const totalBudget = parseFloat(document.getElementById('total-budget').value);
+        
+        // Update budget
+        const budget = getBudget();
+        budget.total = totalBudget;
+        budget.allocation = {
+            Needs: needsPercentage,
+            Wants: wantsPercentage,
+            Savings: savingsPercentage
+        };
+        
+        saveBudget(budget);
+        loadBudgetView();
+    });
+    
+    document.getElementById('reset-budget-btn').addEventListener('click', () => {
+        document.getElementById('needs-percentage').value = 50;
+        document.getElementById('wants-percentage').value = 30;
+        document.getElementById('savings-percentage').value = 20;
+    });
+    
+    document.getElementById('category-budget-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const budget = getBudget();
+        
+        // Update category budgets
+        document.querySelectorAll('.category-budget').forEach(input => {
+            const category = input.getAttribute('data-category');
+            const value = parseFloat(input.value);
+            budget.categories[category] = value;
+        });
+        
+        saveBudget(budget);
+        loadBudgetView();
     });
 }
 
