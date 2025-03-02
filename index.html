@@ -4,51 +4,77 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Budget Buddy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 </head>
 <body>
-    <div class="container">
-        <header class="my-4">
-            <h1 class="text-center">Budget Buddy</h1>
-            <p class="text-center text-muted">Your personal finance assistant</p>
-        </header>
-        
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card mb-4">
-                    <div class="card-header">Navigation</div>
-                    <div class="card-body">
-                        <ul class="nav flex-column">
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-dashboard">Dashboard</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-expenses">Expenses</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-income">Income</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-budget">Budget</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-reports">Reports</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#" id="nav-signout">Sign Out</a></li>
-                        </ul>
-                    </div>
-                </div>
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-wallet"></i>
+                Budget Buddy
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-dashboard" href="#">
+                            <i class="fas fa-chart-pie"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-expenses" href="#">
+                            <i class="fas fa-receipt"></i> Expenses
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-income" href="#">
+                            <i class="fas fa-coins"></i> Income
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-budget" href="#">
+                            <i class="fas fa-sliders-h"></i> Budget
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-reports" href="#">
+                            <i class="fas fa-chart-line"></i> Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-signout" href="#">
+                            <i class="fas fa-sign-out-alt"></i> Sign Out
+                        </a>
+                    </li>
+                </ul>
             </div>
-            
-            <div class="col-md-9">
-                <div id="content-area">
-                    <!-- Content will be loaded here -->
-                    <div class="card">
-                        <div class="card-header">Welcome to Budget Buddy</div>
-                        <div class="card-body">
-                            <p>Select a category from the navigation menu to get started.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div id="content-area">
+            <!-- Content will be loaded here dynamically -->
+            <div class="loading"></div>
         </div>
     </div>
 
+    <footer class="bg-light py-3 mt-5">
+        <div class="container text-center">
+            <p class="text-muted mb-0">Budget Buddy &copy; 2023 | Your Financial Companion</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html> 
