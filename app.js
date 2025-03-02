@@ -1,7 +1,3 @@
-// API Configuration
-const API_KEY = 'YOUR_API_KEY'; // Replace with your actual API key
-const BASE_URL = 'https://financialmodelingprep.com/api/v3';
-
 // Local Storage Keys
 const EXPENSES_KEY = 'expenses';
 const INCOME_KEY = 'income';
@@ -90,56 +86,10 @@ function getBudgetTypeColor(type) {
     return typeColors[type] || '#808080';
 }
 
-// API Functions
-async function fetchData(endpoint) {
-    try {
-        const response = await fetch(`${BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}apikey=${API_KEY}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Fetch error:', error);
-        throw error;
-    }
-}
-
-// Expense API Functions
-async function fetchStockData() {
-    try {
-        // Using the stock quote endpoint to get some financial data
-        return await fetchData('/quote/AAPL,MSFT,GOOGL');
-    } catch (error) {
-        console.error('Error fetching stock data:', error);
-        return [];
-    }
-}
-
-async function addExpenseWithMarketData(expense) {
-    try {
-        // Get current market data to associate with the expense
-        const stockData = await fetchStockData();
-        
-        // In a real API, we would POST to an endpoint
-        // For this demo, we'll add market context to the expense and save to local storage
-        expense.id = Date.now();
-        expense.marketContext = {
-            date: new Date().toISOString(),
-            marketData: stockData.length > 0 ? 
-                `${stockData[0].symbol}: ${stockData[0].price} (${stockData[0].changesPercentage}%)` : 
-                'No market data available'
-        };
-        
-        const expenses = getExpenses();
-        expenses.push(expense);
-        localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-        
-        return expense;
-    } catch (error) {
-        console.error('Error adding expense with market data:', error);
-        // Fall back to simple local storage
-        return saveExpenseToLocalStorage(expense);
-    }
+// Data Management Functions
+function getExpenses() {
+    const expenses = localStorage.getItem(EXPENSES_KEY);
+    return expenses ? JSON.parse(expenses) : [];
 }
 
 function saveExpenseToLocalStorage(expense) {
@@ -150,57 +100,10 @@ function saveExpenseToLocalStorage(expense) {
     return expense;
 }
 
-async function deleteExpenseAPI(id) {
-    try {
-        // In a real API, we would DELETE from an endpoint
-        // For this demo, we'll just remove from local storage
-        const expenses = getExpenses();
-        const filteredExpenses = expenses.filter(expense => expense.id !== id);
-        localStorage.setItem(EXPENSES_KEY, JSON.stringify(filteredExpenses));
-        return { success: true };
-    } catch (error) {
-        console.error('Error deleting expense:', error);
-        throw error;
-    }
-}
-
-// Data Management Functions
-function getExpenses() {
-    const expenses = localStorage.getItem(EXPENSES_KEY);
-    return expenses ? JSON.parse(expenses) : [];
-}
-
-async function saveExpense(expense) {
-    try {
-        // Add expense with market data context
-        await addExpenseWithMarketData(expense);
-        
-        // If we're on the expenses view, refresh it
-        if (document.querySelector('#nav-expenses').classList.contains('active')) {
-            loadExpensesView();
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Failed to save expense:', error);
-        // Fall back to local storage only
-        saveExpenseToLocalStorage(expense);
-        return false;
-    }
-}
-
 function deleteExpense(id) {
-    // Call the API function and then update UI
-    deleteExpenseAPI(id)
-        .then(() => {
-            // If we're on the expenses view, refresh it
-            if (document.querySelector('#nav-expenses').classList.contains('active')) {
-                loadExpensesView();
-            }
-        })
-        .catch(error => {
-            showError('Failed to delete expense. Please try again.');
-        });
+    const expenses = getExpenses();
+    const filteredExpenses = expenses.filter(expense => expense.id !== id);
+    localStorage.setItem(EXPENSES_KEY, JSON.stringify(filteredExpenses));
 }
 
 function updateExpense(updatedExpense) {
@@ -264,225 +167,186 @@ function saveBudget(budget) {
 function loadDashboardView() {
     showLoading();
     
-    // Fetch stock market data for financial context
-    fetchStockData()
-        .then(marketData => {
-            const expenses = getExpenses();
-            const income = getIncome();
-            const budget = getBudget();
-            
-            // Calculate summary data
-            const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-            const totalIncome = income.reduce((sum, income) => sum + parseFloat(income.amount), 0);
-            const balance = totalIncome - totalExpenses;
-            
-            // Calculate category totals
-            const categoryTotals = {};
-            expenses.forEach(expense => {
-                if (!categoryTotals[expense.category]) {
-                    categoryTotals[expense.category] = 0;
-                }
-                categoryTotals[expense.category] += parseFloat(expense.amount);
-            });
-            
-            // Calculate budget type totals (Needs, Wants, Savings)
-            const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
-            const typeCategories = { Needs: [], Wants: [], Savings: [] };
-            
-            Object.keys(categoryTotals).forEach(category => {
-                const type = getBudgetCategoryType(category);
-                typeTotals[type] += categoryTotals[category];
-                typeCategories[type].push(category);
-            });
-            
-            const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
-            
-            // Get recent transactions
-            const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-            const recentIncome = [...income].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-            
-            let html = `
-                <div class="card">
-                    <div class="card-header">Budget Buddy Dashboard</div>
-                    <div class="card-body">
-                        <div class="row mb-4">
-                            <div class="col-md-4">
-                                <div class="summary-card bg-light">
-                                    <div class="value ${balance >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(balance)}</div>
-                                    <div class="label">Current Balance</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="summary-card bg-light">
-                                    <div class="value text-success">${formatCurrency(totalIncome)}</div>
-                                    <div class="label">Total Income</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="summary-card bg-light">
-                                    <div class="value text-danger">${formatCurrency(totalExpenses)}</div>
-                                    <div class="label">Total Expenses</div>
-                                </div>
-                            </div>
+    const expenses = getExpenses();
+    const income = getIncome();
+    const budget = getBudget();
+    
+    // Calculate summary data
+    const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+    const totalIncome = income.reduce((sum, income) => sum + parseFloat(income.amount), 0);
+    const balance = totalIncome - totalExpenses;
+    
+    // Calculate category totals
+    const categoryTotals = {};
+    expenses.forEach(expense => {
+        if (!categoryTotals[expense.category]) {
+            categoryTotals[expense.category] = 0;
+        }
+        categoryTotals[expense.category] += parseFloat(expense.amount);
+    });
+    
+    // Calculate budget type totals (Needs, Wants, Savings)
+    const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
+    const typeCategories = { Needs: [], Wants: [], Savings: [] };
+    
+    Object.keys(categoryTotals).forEach(category => {
+        const type = getBudgetCategoryType(category);
+        typeTotals[type] += categoryTotals[category];
+        typeCategories[type].push(category);
+    });
+    
+    const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
+    
+    // Get recent transactions
+    const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+    const recentIncome = [...income].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+    
+    let html = `
+        <div class="card">
+            <div class="card-header">Budget Buddy Dashboard</div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="summary-card bg-light">
+                            <div class="value ${balance >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(balance)}</div>
+                            <div class="label">Current Balance</div>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h5>Expense Breakdown</h5>
-                                <div class="chart-container">
-                                    <canvas id="expense-chart"></canvas>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <h5>Recent Transactions</h5>
-                                <div class="list-group">`;
-            
-            // Add recent expenses
-            recentExpenses.forEach(expense => {
-                html += `
-                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-bold">${expense.description}</div>
-                            <small class="text-muted">${expense.date} - ${expense.category}</small>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="summary-card bg-light">
+                            <div class="value text-success">${formatCurrency(totalIncome)}</div>
+                            <div class="label">Total Income</div>
                         </div>
-                        <span class="badge bg-danger rounded-pill">${formatCurrency(expense.amount)}</span>
-                    </div>`;
-            });
-            
-            // Add recent income
-            recentIncome.forEach(income => {
-                html += `
-                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-bold">${income.description}</div>
-                            <small class="text-muted">${income.date} - Income</small>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="summary-card bg-light">
+                            <div class="value text-danger">${formatCurrency(totalExpenses)}</div>
+                            <div class="label">Total Expenses</div>
                         </div>
-                        <span class="badge bg-success rounded-pill">${formatCurrency(income.amount)}</span>
-                    </div>`;
-            });
-            
-            html += `
-                                </div>
-                            </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Expense Breakdown</h5>
+                        <div class="chart-container">
+                            <canvas id="expense-chart"></canvas>
                         </div>
-                        
-                        <div class="row mt-4">
-                            <div class="col-md-12">
-                                <h5>Market Overview</h5>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Symbol</th>
-                                                <th>Price</th>
-                                                <th>Change</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>`;
-            
-            // Add market data
-            marketData.forEach(stock => {
-                html += `
-                    <tr>
-                        <td>${stock.symbol}</td>
-                        <td>${formatCurrency(stock.price)}</td>
-                        <td class="${stock.change >= 0 ? 'text-success' : 'text-danger'}">${stock.change.toFixed(2)} (${stock.changesPercentage.toFixed(2)}%)</td>
-                    </tr>`;
-            });
-            
-            html += `
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Recent Transactions</h5>
+                        <div class="list-group">`;
+    
+    // Add recent expenses
+    recentExpenses.forEach(expense => {
+        html += `
+            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-bold">${expense.description}</div>
+                    <small class="text-muted">${expense.date} - ${expense.category}</small>
+                </div>
+                <span class="badge bg-danger rounded-pill">${formatCurrency(expense.amount)}</span>
+            </div>`;
+    });
+    
+    // Add recent income
+    recentIncome.forEach(income => {
+        html += `
+            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-bold">${income.description}</div>
+                    <small class="text-muted">${income.date} - Income</small>
+                </div>
+                <span class="badge bg-success rounded-pill">${formatCurrency(income.amount)}</span>
+            </div>`;
+    });
+    
+    html += `
                         </div>
                     </div>
                 </div>`;
-            
-            // Add budget allocation section to dashboard
-            html += `
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <h5>Budget Allocation</h5>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="card" style="border-color: ${getBudgetTypeColor('Needs')};">
-                                    <div class="card-body">
-                                        <h6 class="card-title">Needs (${budget.allocation.Needs}%)</h6>
-                                        <p class="card-text">Essential expenses like housing, food, utilities, and healthcare.</p>
-                                        <div class="progress">
-                                            <div class="progress-bar" 
-                                                style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
-                                                ${formatCurrency(typeTotals.Needs)} / ${formatCurrency(budget.total * budget.allocation.Needs / 100)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card" style="border-color: ${getBudgetTypeColor('Wants')};">
-                                    <div class="card-body">
-                                        <h6 class="card-title">Wants (${budget.allocation.Wants}%)</h6>
-                                        <p class="card-text">Non-essential expenses like entertainment, dining out, and shopping.</p>
-                                        <div class="progress">
-                                            <div class="progress-bar" 
-                                                style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
-                                                ${formatCurrency(typeTotals.Wants)} / ${formatCurrency(budget.total * budget.allocation.Wants / 100)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card" style="border-color: ${getBudgetTypeColor('Savings')};">
-                                    <div class="card-body">
-                                        <h6 class="card-title">Savings (${budget.allocation.Savings}%)</h6>
-                                        <p class="card-text">Money set aside for future goals, investments, and emergencies.</p>
-                                        <div class="progress">
-                                            <div class="progress-bar" 
-                                                style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
-                                                ${formatCurrency(typeTotals.Savings)} / ${formatCurrency(budget.total * budget.allocation.Savings / 100)}
-                                            </div>
-                                        </div>
+    
+    // Add budget allocation section to dashboard
+    html += `
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <h5>Budget Allocation</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card" style="border-color: ${getBudgetTypeColor('Needs')};">
+                            <div class="card-body">
+                                <h6 class="card-title">Needs (${budget.allocation.Needs}%)</h6>
+                                <p class="card-text">Essential expenses like housing, food, utilities, and healthcare.</p>
+                                <div class="progress">
+                                    <div class="progress-bar" 
+                                        style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
+                                        ${formatCurrency(typeTotals.Needs)} / ${formatCurrency(budget.total * budget.allocation.Needs / 100)}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>`;
-            
-            contentArea.innerHTML = html;
-            
-            // Create expense chart
-            const ctx = document.getElementById('expense-chart').getContext('2d');
-            const categories = Object.keys(categoryTotals);
-            const amounts = categories.map(category => categoryTotals[category]);
-            const backgroundColors = categories.map(category => getCategoryColor(category));
-            
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: categories,
-                    datasets: [{
-                        data: amounts,
-                        backgroundColor: backgroundColors,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        }
-                    }
+                    <div class="col-md-4">
+                        <div class="card" style="border-color: ${getBudgetTypeColor('Wants')};">
+                            <div class="card-body">
+                                <h6 class="card-title">Wants (${budget.allocation.Wants}%)</h6>
+                                <p class="card-text">Non-essential expenses like entertainment, dining out, and shopping.</p>
+                                <div class="progress">
+                                    <div class="progress-bar" 
+                                        style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
+                                        ${formatCurrency(typeTotals.Wants)} / ${formatCurrency(budget.total * budget.allocation.Wants / 100)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card" style="border-color: ${getBudgetTypeColor('Savings')};">
+                            <div class="card-body">
+                                <h6 class="card-title">Savings (${budget.allocation.Savings}%)</h6>
+                                <p class="card-text">Money set aside for future goals, investments, and emergencies.</p>
+                                <div class="progress">
+                                    <div class="progress-bar" 
+                                        style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
+                                        ${formatCurrency(typeTotals.Savings)} / ${formatCurrency(budget.total * budget.allocation.Savings / 100)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    contentArea.innerHTML = html;
+    
+    // Create expense chart
+    const expenseCtx = document.getElementById('expense-chart').getContext('2d');
+    
+    // Prepare data for chart
+    const categories = Object.keys(categoryTotals);
+    const values = Object.values(categoryTotals);
+    const backgroundColors = categories.map(category => getCategoryColor(category));
+    
+    new Chart(expenseCtx, {
+        type: 'doughnut',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: values,
+                backgroundColor: backgroundColors
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
                 }
-            });
-        })
-        .catch(error => {
-            showError('Failed to load dashboard data. Please try again later.');
-        });
+            }
+        }
+    });
 }
 
 function loadExpensesView() {
@@ -497,7 +361,6 @@ function loadExpensesView() {
                 <div class="row mb-4">
                     <div class="col-md-12">
                         <button class="btn btn-primary" id="add-expense-btn">Add New Expense</button>
-                        <button class="btn btn-success" id="add-api-expense-btn">Add Expense with Market Data</button>
                     </div>
                 </div>
                 
@@ -528,6 +391,8 @@ function loadExpensesView() {
                                         <option value="Shopping">Shopping</option>
                                         <option value="Education">Education</option>
                                         <option value="Travel">Travel</option>
+                                        <option value="Investments">Investments</option>
+                                        <option value="Savings">Savings</option>
                                         <option value="Other">Other</option>
                                     </select>
                                 </div>
@@ -555,7 +420,6 @@ function loadExpensesView() {
                                 <th>Category</th>
                                 <th>Type</th>
                                 <th>Amount</th>
-                                <th>Market Context</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -579,7 +443,6 @@ function loadExpensesView() {
                     <td><span class="category-badge" style="background-color: ${getCategoryColor(expense.category)}; color: white;">${expense.category}</span></td>
                     <td><span class="badge" style="background-color: ${getBudgetTypeColor(budgetType)};">${budgetType}</span></td>
                     <td>${formatCurrency(expense.amount)}</td>
-                    <td>${expense.marketContext ? expense.marketContext.marketData : 'N/A'}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary edit-expense-btn" data-id="${expense.id}">Edit</button>
                         <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-id="${expense.id}">Delete</button>
@@ -612,43 +475,6 @@ function loadExpensesView() {
         document.getElementById('expense-date').value = today;
     });
     
-    // Add API expense button
-    document.getElementById('add-api-expense-btn').addEventListener('click', async () => {
-        try {
-            // Show loading state
-            document.getElementById('add-api-expense-btn').textContent = 'Loading...';
-            document.getElementById('add-api-expense-btn').disabled = true;
-            
-            // Fetch stock data to get a realistic expense amount
-            const stockData = await fetchStockData();
-            
-            if (stockData.length > 0) {
-                // Create an expense based on the stock price
-                const stock = stockData[0];
-                const newExpense = {
-                    description: `${stock.symbol} Related Expense`,
-                    amount: (stock.price / 10).toFixed(2), // Use a fraction of the stock price
-                    category: 'Investments',
-                    date: today,
-                    notes: `Auto-generated expense based on ${stock.symbol} price: $${stock.price}`
-                };
-                
-                // Save with market data
-                await saveExpense(newExpense);
-                
-                // Reload the view
-                loadExpensesView();
-            } else {
-                throw new Error('No stock data available');
-            }
-        } catch (error) {
-            console.error('Error adding API expense:', error);
-            document.getElementById('add-api-expense-btn').textContent = 'Add Expense with Market Data';
-            document.getElementById('add-api-expense-btn').disabled = false;
-            showError('Failed to add expense with market data. Please try again.');
-        }
-    });
-    
     document.getElementById('cancel-expense-btn').addEventListener('click', () => {
         document.getElementById('expense-form-container').style.display = 'none';
     });
@@ -672,9 +498,7 @@ function loadExpensesView() {
             loadExpensesView();
         } else {
             // Add new expense
-            saveExpense(expense).then(() => {
-                loadExpensesView();
-            });
+            saveExpense(expense);
         }
     });
     
@@ -705,6 +529,7 @@ function loadExpensesView() {
             if (confirm('Are you sure you want to delete this expense?')) {
                 const id = parseInt(button.getAttribute('data-id'));
                 deleteExpense(id);
+                loadExpensesView();
             }
         });
     });
@@ -1069,4 +894,19 @@ function initDashboard() {
 }
 
 // Start the application
-initDashboard(); 
+initDashboard();
+
+// Simplify the expense saving function
+function saveExpense(expense) {
+    expense.id = Date.now();
+    const expenses = getExpenses();
+    expenses.push(expense);
+    localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
+    
+    // If we're on the expenses view, refresh it
+    if (document.querySelector('#nav-expenses').classList.contains('active')) {
+        loadExpensesView();
+    }
+    
+    return true;
+} 
