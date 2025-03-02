@@ -914,6 +914,18 @@ function loadExpensesView() {
                 document.getElementById('expense-form-title').textContent = 'Add New Expense';
                 document.getElementById('expense-form').reset();
                 document.getElementById('expense-date').value = today;
+                
+                // Initialize tax options to be hidden when form is opened
+                document.getElementById('tax-options').style.display = 'none';
+                document.getElementById('expense-taxable').checked = false;
+                
+                // Initialize total amount
+                const amountInput = document.getElementById('expense-amount');
+                if (amountInput && amountInput.value) {
+                    document.getElementById('expense-total-amount').value = amountInput.value;
+                } else {
+                    document.getElementById('expense-total-amount').value = '0.00';
+                }
             });
             
             document.getElementById('cancel-expense-btn').addEventListener('click', () => {
@@ -921,138 +933,133 @@ function loadExpensesView() {
             });
             
             // Add event listeners for the tax functionality
-            setTimeout(() => {
-                const taxableCheckbox = document.getElementById('expense-taxable');
-                const taxOptions = document.getElementById('tax-options');
-                const amountInput = document.getElementById('expense-amount');
-                const taxRateInput = document.getElementById('expense-tax-rate');
-                const taxAmountDisplay = document.getElementById('expense-tax-amount');
-                const totalAmountDisplay = document.getElementById('expense-total-amount');
+            const taxableCheckbox = document.getElementById('expense-taxable');
+            const taxOptions = document.getElementById('tax-options');
+            const amountInput = document.getElementById('expense-amount');
+            const taxRateInput = document.getElementById('expense-tax-rate');
+            const taxAmountDisplay = document.getElementById('expense-tax-amount');
+            const totalAmountDisplay = document.getElementById('expense-total-amount');
+            
+            // Function to calculate tax and total
+            function calculateTaxAndTotal() {
+                const amount = parseFloat(amountInput.value) || 0;
                 
-                // Function to calculate tax and total
-                function calculateTaxAndTotal() {
-                    const amount = parseFloat(amountInput.value) || 0;
+                if (taxableCheckbox.checked) {
+                    const taxRate = parseFloat(taxRateInput.value) || 0;
+                    const taxAmount = amount * (taxRate / 100);
+                    const totalAmount = amount + taxAmount;
                     
-                    if (taxableCheckbox.checked) {
-                        const taxRate = parseFloat(taxRateInput.value) || 0;
-                        const taxAmount = amount * (taxRate / 100);
-                        const totalAmount = amount + taxAmount;
-                        
-                        taxAmountDisplay.value = taxAmount.toFixed(2);
-                        totalAmountDisplay.value = totalAmount.toFixed(2);
+                    taxAmountDisplay.value = taxAmount.toFixed(2);
+                    totalAmountDisplay.value = totalAmount.toFixed(2);
+                } else {
+                    totalAmountDisplay.value = amount.toFixed(2);
+                }
+            }
+            
+            // Show/hide tax options when checkbox is clicked
+            if (taxableCheckbox) {
+                taxableCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        taxOptions.style.display = 'flex';
                     } else {
-                        totalAmountDisplay.value = amount.toFixed(2);
+                        taxOptions.style.display = 'none';
                     }
-                }
-                
-                // Show/hide tax options when checkbox is clicked
-                if (taxableCheckbox) {
-                    taxableCheckbox.addEventListener('change', function() {
-                        if (this.checked) {
-                            taxOptions.style.display = 'flex';
-                        } else {
-                            taxOptions.style.display = 'none';
-                        }
-                        calculateTaxAndTotal();
-                    });
-                }
-                
-                // Update calculations when amount or tax rate changes
-                if (amountInput) {
-                    amountInput.addEventListener('input', calculateTaxAndTotal);
-                }
-                
-                if (taxRateInput) {
-                    taxRateInput.addEventListener('input', calculateTaxAndTotal);
-                }
-                
-                // Initialize total amount
-                if (amountInput && amountInput.value) {
                     calculateTaxAndTotal();
-                }
-            }, 100);
+                });
+            }
+            
+            // Update calculations when amount or tax rate changes
+            if (amountInput) {
+                amountInput.addEventListener('input', calculateTaxAndTotal);
+            }
+            
+            if (taxRateInput) {
+                taxRateInput.addEventListener('input', calculateTaxAndTotal);
+            }
+            
+            // Initialize total amount
+            if (amountInput && amountInput.value) {
+                calculateTaxAndTotal();
+            }
             
             // Update the form submission handler to include tax information
-            setTimeout(() => {
-                const expenseForm = document.getElementById('expense-form');
-                if (expenseForm) {
-                    // Remove any existing event listeners to prevent duplicates
-                    const newForm = expenseForm.cloneNode(true);
-                    expenseForm.parentNode.replaceChild(newForm, expenseForm);
+            const expenseForm = document.getElementById('expense-form');
+            if (expenseForm) {
+                expenseForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
                     
-                    newForm.addEventListener('submit', async (e) => {
-                        e.preventDefault();
+                    try {
+                        const id = document.getElementById('expense-id').value;
+                        const amount = parseFloat(document.getElementById('expense-amount').value) || 0;
+                        const isTaxable = document.getElementById('expense-taxable')?.checked || false;
                         
-                        try {
-                            const id = document.getElementById('expense-id').value;
-                            const amount = parseFloat(document.getElementById('expense-amount').value) || 0;
-                            const isTaxable = document.getElementById('expense-taxable').checked;
-                            
-                            let taxRate = 0;
-                            let taxAmount = 0;
-                            let totalAmount = amount;
-                            
-                            if (isTaxable) {
-                                taxRate = parseFloat(document.getElementById('expense-tax-rate').value) || 0;
-                                taxAmount = amount * (taxRate / 100);
-                                totalAmount = amount + taxAmount;
-                            }
-                            
-                            // Make sure all required fields have values
-                            if (!document.getElementById('expense-description').value) {
-                                alert('Please enter a description');
-                                return;
-                            }
-                            
-                            if (!document.getElementById('expense-category').value) {
-                                alert('Please select a category');
-                                return;
-                            }
-                            
-                            if (!document.getElementById('expense-date').value) {
-                                alert('Please select a date');
-                                return;
-                            }
-                            
-                            const expense = {
-                                description: document.getElementById('expense-description').value,
-                                amount: totalAmount, // Save the total amount including tax
-                                baseAmount: amount, // Save the pre-tax amount
-                                isTaxable: isTaxable,
-                                taxRate: isTaxable ? taxRate : 0,
-                                taxAmount: isTaxable ? taxAmount : 0,
-                                category: document.getElementById('expense-category').value,
-                                date: document.getElementById('expense-date').value,
-                                notes: document.getElementById('expense-notes').value || ''
-                            };
-                            
-                            if (id) {
-                                // Update existing expense
-                                expense.id = id;
-                            }
-                            
-                            console.log('Submitting expense:', expense);
-                            
-                            // Save the expense
-                            const success = await saveExpense(expense);
-                            
-                            if (success) {
-                                // Hide the form - make sure this element exists
-                                const formContainer = document.getElementById('expense-form-container');
-                                if (formContainer) {
-                                    formContainer.style.display = 'none';
-                                }
-                                
-                                // Show success message
-                                alert('Expense saved successfully!');
-                            }
-                        } catch (error) {
-                            console.error('Error in form submission:', error);
-                            alert(`Error saving expense: ${error.message}`);
+                        let taxRate = 0;
+                        let taxAmount = 0;
+                        let totalAmount = amount;
+                        
+                        if (isTaxable) {
+                            taxRate = parseFloat(document.getElementById('expense-tax-rate')?.value) || 0;
+                            taxAmount = amount * (taxRate / 100);
+                            totalAmount = amount + taxAmount;
                         }
-                    });
-                }
-            }, 100);
+                        
+                        // Make sure all required fields have values
+                        const descriptionElement = document.getElementById('expense-description');
+                        if (!descriptionElement || !descriptionElement.value) {
+                            alert('Please enter a description');
+                            return;
+                        }
+                        
+                        const categoryElement = document.getElementById('expense-category');
+                        if (!categoryElement || !categoryElement.value) {
+                            alert('Please select a category');
+                            return;
+                        }
+                        
+                        const dateElement = document.getElementById('expense-date');
+                        if (!dateElement || !dateElement.value) {
+                            alert('Please select a date');
+                            return;
+                        }
+                        
+                        const expense = {
+                            description: descriptionElement.value,
+                            amount: totalAmount, // Save the total amount including tax
+                            baseAmount: amount, // Save the pre-tax amount
+                            isTaxable: isTaxable,
+                            taxRate: isTaxable ? taxRate : 0,
+                            taxAmount: isTaxable ? taxAmount : 0,
+                            category: categoryElement.value,
+                            date: dateElement.value,
+                            notes: document.getElementById('expense-notes')?.value || ''
+                        };
+                        
+                        if (id) {
+                            // Update existing expense
+                            expense.id = id;
+                        }
+                        
+                        console.log('Submitting expense:', expense);
+                        
+                        // Save the expense
+                        const success = await saveExpense(expense);
+                        
+                        if (success) {
+                            // Hide the form - add null check here
+                            const formContainer = document.getElementById('expense-form-container');
+                            if (formContainer) {
+                                formContainer.style.display = 'none';
+                            }
+                            
+                            // Show success message
+                            alert('Expense saved successfully!');
+                        }
+                    } catch (error) {
+                        console.error('Error in form submission:', error);
+                        alert(`Error saving expense: ${error.message}`);
+                    }
+                });
+            }
             
             // Add event listeners to edit buttons
             const editButtons = document.querySelectorAll('.edit-expense-btn');
@@ -1075,6 +1082,7 @@ function loadExpensesView() {
                             document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
                             document.getElementById('expense-taxable').checked = expense.isTaxable || false;
                             
+                            // Make sure to show/hide tax options based on the expense's taxable status
                             if (expense.isTaxable) {
                                 document.getElementById('tax-options').style.display = 'flex';
                                 document.getElementById('expense-tax-rate').value = expense.taxRate;
