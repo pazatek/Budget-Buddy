@@ -31,6 +31,14 @@
             align-items: center;
             margin-bottom: 15px;
         }
+        .button-container {
+            display: flex;
+            align-items: center;
+        }
+        .note-text {
+            display: block;
+            margin-bottom: 3px;
+        }
     </style>
 </head>
 <body>
@@ -46,6 +54,9 @@
             <input type="text" id="note-input" class="form-control" placeholder="Add a note manually..." required>
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-plus"></i>
+            </button>
+            <button id="cancel-edit-btn" class="btn btn-outline-secondary" type="button" style="display: none;">
+                <i class="fas fa-times"></i>
             </button>
         </div>
     </form>

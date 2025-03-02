@@ -3,6 +3,7 @@ const notesList = document.getElementById('notes-list');
 const clearNotesBtn = document.getElementById('clear-notes-btn');
 const addNoteForm = document.getElementById('add-note-form');
 const noteInput = document.getElementById('note-input');
+let editingNoteIndex = null; // Track which note is being edited
 
 // Load notes from storage when popup opens
 function loadNotes() {
@@ -31,6 +32,7 @@ function displayNotes(notes) {
         
         const noteText = document.createElement('span');
         noteText.textContent = note.text;
+        noteText.className = 'note-text';
         
         const noteDate = document.createElement('small');
         noteDate.className = 'text-muted d-block';
@@ -39,6 +41,17 @@ function displayNotes(notes) {
         noteContent.appendChild(noteText);
         noteContent.appendChild(noteDate);
         
+        // Create button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'button-container';
+        
+        // Create edit button
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-outline-primary me-1';
+        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+        editBtn.title = 'Edit note';
+        editBtn.addEventListener('click', () => editNote(index, note.text));
+        
         // Create delete button
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn btn-sm btn-outline-danger';
@@ -46,10 +59,43 @@ function displayNotes(notes) {
         deleteBtn.title = 'Delete note';
         deleteBtn.addEventListener('click', () => deleteNote(index));
         
+        buttonContainer.appendChild(editBtn);
+        buttonContainer.appendChild(deleteBtn);
+        
         li.appendChild(noteContent);
-        li.appendChild(deleteBtn);
+        li.appendChild(buttonContainer);
         notesList.appendChild(li);
     });
+}
+
+// Edit a note
+function editNote(index, text) {
+    // Set the input value to the note text
+    noteInput.value = text;
+    noteInput.focus();
+    
+    // Change the submit button to show we're editing
+    const submitBtn = addNoteForm.querySelector('button[type="submit"]');
+    submitBtn.innerHTML = '<i class="fas fa-save"></i>';
+    submitBtn.classList.add('btn-success');
+    submitBtn.classList.remove('btn-primary');
+    
+    // Store the index of the note being edited
+    editingNoteIndex = index;
+    
+    // Scroll to the top to see the edit form
+    window.scrollTo(0, 0);
+}
+
+// Cancel editing
+function cancelEdit() {
+    const submitBtn = addNoteForm.querySelector('button[type="submit"]');
+    submitBtn.innerHTML = '<i class="fas fa-plus"></i>';
+    submitBtn.classList.add('btn-primary');
+    submitBtn.classList.remove('btn-success');
+    
+    noteInput.value = '';
+    editingNoteIndex = null;
 }
 
 // Delete a note
@@ -60,6 +106,14 @@ function deleteNote(index) {
         
         chrome.storage.sync.set({ highlightedNotes: notes }, function() {
             displayNotes(notes);
+            
+            // If we were editing this note, cancel the edit
+            if (editingNoteIndex === index) {
+                cancelEdit();
+            } else if (editingNoteIndex !== null && editingNoteIndex > index) {
+                // Adjust the editing index if we deleted a note before it
+                editingNoteIndex--;
+            }
         });
     });
 }
@@ -69,11 +123,12 @@ clearNotesBtn.addEventListener('click', () => {
     if (confirm('Are you sure you want to clear all notes?')) {
         chrome.storage.sync.set({ highlightedNotes: [] }, function() {
             displayNotes([]);
+            cancelEdit();
         });
     }
 });
 
-// Handle manual note addition
+// Handle note form submission (add new or update existing)
 addNoteForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = noteInput.value.trim();
@@ -82,17 +137,37 @@ addNoteForm.addEventListener('submit', (e) => {
         chrome.storage.sync.get(['highlightedNotes'], function(result) {
             const notes = result.highlightedNotes || [];
             
-            notes.push({
-                text: text,
-                timestamp: Date.now()
-            });
+            if (editingNoteIndex !== null) {
+                // Update existing note
+                notes[editingNoteIndex] = {
+                    text: text,
+                    timestamp: Date.now() // Update timestamp to show it was edited
+                };
+                
+                // Reset edit state
+                cancelEdit();
+            } else {
+                // Add new note
+                notes.push({
+                    text: text,
+                    timestamp: Date.now()
+                });
+                
+                // Clear input
+                noteInput.value = '';
+            }
             
             chrome.storage.sync.set({ highlightedNotes: notes }, function() {
                 displayNotes(notes);
-                noteInput.value = '';
             });
         });
     }
+});
+
+// Add cancel button functionality
+document.getElementById('cancel-edit-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    cancelEdit();
 });
 
 // Initialize the popup
