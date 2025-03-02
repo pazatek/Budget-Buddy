@@ -273,42 +273,93 @@ function loadDashboardView() {
                 <h5>Budget Allocation</h5>
                 <div class="row">
                     <div class="col-md-4">
-                        <div class="card" style="border-color: ${getBudgetTypeColor('Needs')};">
-                            <div class="card-body">
-                                <h6 class="card-title">Needs (${budget.allocation.Needs}%)</h6>
-                                <p class="card-text">Essential expenses like housing, food, utilities, and healthcare.</p>
-                                <div class="progress">
-                                    <div class="progress-bar" 
-                                        style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
-                                        ${formatCurrency(typeTotals.Needs)} / ${formatCurrency(budget.total * budget.allocation.Needs / 100)}
+                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Needs')};">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="card-title mb-0">Needs (${budget.allocation.Needs}%)</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#needsInfo" aria-expanded="false">
+                                        <i class="bi bi-info-circle"></i> Info
+                                    </button>
+                                </div>
+                                <div class="collapse mb-3" id="needsInfo">
+                                    <div class="card card-body bg-light">
+                                        <small>Essential expenses like housing, food, utilities, and healthcare.</small>
+                                    </div>
+                                </div>
+                                <div class="mt-auto">
+                                    <div class="progress" style="height: 25px;">
+                                        <div class="progress-bar position-relative" 
+                                            style="width: ${Math.min((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Needs')};">
+                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                ${Math.round((typeTotals.Needs / (budget.total * budget.allocation.Needs / 100)) * 100)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <small>${formatCurrency(typeTotals.Needs)}</small>
+                                        <small>${formatCurrency(budget.total * budget.allocation.Needs / 100)}</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card" style="border-color: ${getBudgetTypeColor('Wants')};">
-                            <div class="card-body">
-                                <h6 class="card-title">Wants (${budget.allocation.Wants}%)</h6>
-                                <p class="card-text">Non-essential expenses like entertainment, dining out, and shopping.</p>
-                                <div class="progress">
-                                    <div class="progress-bar" 
-                                        style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
-                                        ${formatCurrency(typeTotals.Wants)} / ${formatCurrency(budget.total * budget.allocation.Wants / 100)}
+                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Wants')};">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="card-title mb-0">Wants (${budget.allocation.Wants}%)</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#wantsInfo" aria-expanded="false">
+                                        <i class="bi bi-info-circle"></i> Info
+                                    </button>
+                                </div>
+                                <div class="collapse mb-3" id="wantsInfo">
+                                    <div class="card card-body bg-light">
+                                        <small>Non-essential expenses like entertainment, dining out, and shopping.</small>
+                                    </div>
+                                </div>
+                                <div class="mt-auto">
+                                    <div class="progress" style="height: 25px;">
+                                        <div class="progress-bar position-relative" 
+                                            style="width: ${Math.min((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Wants')};">
+                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                ${Math.round((typeTotals.Wants / (budget.total * budget.allocation.Wants / 100)) * 100)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <small>${formatCurrency(typeTotals.Wants)}</small>
+                                        <small>${formatCurrency(budget.total * budget.allocation.Wants / 100)}</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card" style="border-color: ${getBudgetTypeColor('Savings')};">
-                            <div class="card-body">
-                                <h6 class="card-title">Savings (${budget.allocation.Savings}%)</h6>
-                                <p class="card-text">Money set aside for future goals, investments, and emergencies.</p>
-                                <div class="progress">
-                                    <div class="progress-bar" 
-                                        style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
-                                        ${formatCurrency(typeTotals.Savings)} / ${formatCurrency(budget.total * budget.allocation.Savings / 100)}
+                        <div class="card h-100" style="border-color: ${getBudgetTypeColor('Savings')};">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="card-title mb-0">Savings (${budget.allocation.Savings}%)</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#savingsInfo" aria-expanded="false">
+                                        <i class="bi bi-info-circle"></i> Info
+                                    </button>
+                                </div>
+                                <div class="collapse mb-3" id="savingsInfo">
+                                    <div class="card card-body bg-light">
+                                        <small>Money set aside for future goals, investments, and emergencies.</small>
+                                    </div>
+                                </div>
+                                <div class="mt-auto">
+                                    <div class="progress" style="height: 25px;">
+                                        <div class="progress-bar position-relative" 
+                                            style="width: ${Math.min((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100, 100)}%; background-color: ${getBudgetTypeColor('Savings')};">
+                                            <span class="position-absolute w-100 text-center" style="left: 0; line-height: 25px; color: ${(typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100 > 50 ? 'white' : 'black'};">
+                                                ${Math.round((typeTotals.Savings / (budget.total * budget.allocation.Savings / 100)) * 100)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <small>${formatCurrency(typeTotals.Savings)}</small>
+                                        <small>${formatCurrency(budget.total * budget.allocation.Savings / 100)}</small>
                                     </div>
                                 </div>
                             </div>
