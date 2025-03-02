@@ -879,22 +879,63 @@ function loadBudgetView() {
                     <div class="col-md-12">
                         <h5>Category Budget Settings</h5>
                         <form id="category-budget-form">
+                            <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Needs')};">Needs</h6>
                             <div class="row">`;
     
-    // Add inputs for each expense category
-    Object.keys(BUDGET_CATEGORIES).forEach(category => {
-        const type = BUDGET_CATEGORIES[category];
+    // Add inputs for Needs categories
+    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Needs').forEach(category => {
         html += `
             <div class="col-md-4 mb-3">
                 <div class="input-group">
-                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor(type)}; color: white;">${category}</span>
+                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Needs')}; color: white;">${category}</span>
                     <input type="number" class="form-control category-budget" 
                         data-category="${category}" 
                         min="0" 
                         step="0.01" 
                         value="${budget.categories[category] || 0}">
                 </div>
-                <small class="text-muted">${type}</small>
+            </div>`;
+    });
+    
+    html += `
+                            </div>
+                            
+                            <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Wants')};">Wants</h6>
+                            <div class="row">`;
+    
+    // Add inputs for Wants categories
+    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Wants').forEach(category => {
+        html += `
+            <div class="col-md-4 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Wants')}; color: white;">${category}</span>
+                    <input type="number" class="form-control category-budget" 
+                        data-category="${category}" 
+                        min="0" 
+                        step="0.01" 
+                        value="${budget.categories[category] || 0}">
+                </div>
+            </div>`;
+    });
+    
+    html += `
+                            </div>
+                            
+                            <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Savings')};">Savings</h6>
+                            <div class="row">`;
+    
+    // Add inputs for Savings categories
+    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Savings').forEach(category => {
+        html += `
+            <div class="col-md-4 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Savings')}; color: white;">${category}</span>
+                    <input type="number" class="form-control category-budget" 
+                        data-category="${category}" 
+                        min="0" 
+                        step="0.01" 
+                        value="${budget.categories[category] || 0}">
+                </div>
             </div>`;
     });
     
@@ -903,117 +944,115 @@ function loadBudgetView() {
                             <button type="submit" class="btn btn-primary">Save Category Budgets</button>
                         </form>
                     </div>
-                </div>
-            </div>
-        </div>`;
-    
-    contentArea.innerHTML = html;
-    
-    // Create allocation chart
-    const allocationCtx = document.getElementById('allocation-chart').getContext('2d');
-    new Chart(allocationCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Needs', 'Wants', 'Savings'],
-            datasets: [{
-                data: [budget.allocation.Needs, budget.allocation.Wants, budget.allocation.Savings],
-                backgroundColor: [
-                    getBudgetTypeColor('Needs'),
-                    getBudgetTypeColor('Wants'),
-                    getBudgetTypeColor('Savings')
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Budget Allocation'
+                </div>`;
+            
+            contentArea.innerHTML = html;
+            
+            // Create allocation chart
+            const allocationCtx = document.getElementById('allocation-chart').getContext('2d');
+            new Chart(allocationCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Needs', 'Wants', 'Savings'],
+                    datasets: [{
+                        data: [budget.allocation.Needs, budget.allocation.Wants, budget.allocation.Savings],
+                        backgroundColor: [
+                            getBudgetTypeColor('Needs'),
+                            getBudgetTypeColor('Wants'),
+                            getBudgetTypeColor('Savings')
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Budget Allocation'
+                        }
+                    }
                 }
-            }
-        }
-    });
-    
-    // Create spending chart
-    const spendingCtx = document.getElementById('spending-chart').getContext('2d');
-    new Chart(spendingCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Needs', 'Wants', 'Savings'],
-            datasets: [{
-                data: [typeTotals.Needs, typeTotals.Wants, typeTotals.Savings],
-                backgroundColor: [
-                    getBudgetTypeColor('Needs'),
-                    getBudgetTypeColor('Wants'),
-                    getBudgetTypeColor('Savings')
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Current Spending'
+            });
+            
+            // Create spending chart
+            const spendingCtx = document.getElementById('spending-chart').getContext('2d');
+            new Chart(spendingCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Needs', 'Wants', 'Savings'],
+                    datasets: [{
+                        data: [typeTotals.Needs, typeTotals.Wants, typeTotals.Savings],
+                        backgroundColor: [
+                            getBudgetTypeColor('Needs'),
+                            getBudgetTypeColor('Wants'),
+                            getBudgetTypeColor('Savings')
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Current Spending'
+                        }
+                    }
                 }
-            }
+            });
+            
+            // Add event listeners
+            document.getElementById('budget-allocation-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const needsPercentage = parseInt(document.getElementById('needs-percentage').value);
+                const wantsPercentage = parseInt(document.getElementById('wants-percentage').value);
+                const savingsPercentage = parseInt(document.getElementById('savings-percentage').value);
+                
+                // Validate that percentages add up to 100
+                if (needsPercentage + wantsPercentage + savingsPercentage !== 100) {
+                    alert('Percentages must add up to 100%');
+                    return;
+                }
+                
+                const totalBudget = parseFloat(document.getElementById('total-budget').value);
+                
+                // Update budget
+                const budget = getBudget();
+                budget.total = totalBudget;
+                budget.allocation = {
+                    Needs: needsPercentage,
+                    Wants: wantsPercentage,
+                    Savings: savingsPercentage
+                };
+                
+                saveBudget(budget);
+                loadBudgetView();
+            });
+            
+            document.getElementById('reset-budget-btn').addEventListener('click', () => {
+                document.getElementById('needs-percentage').value = 50;
+                document.getElementById('wants-percentage').value = 30;
+                document.getElementById('savings-percentage').value = 20;
+            });
+            
+            document.getElementById('category-budget-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const budget = getBudget();
+                
+                // Update category budgets
+                document.querySelectorAll('.category-budget').forEach(input => {
+                    const category = input.getAttribute('data-category');
+                    const value = parseFloat(input.value);
+                    budget.categories[category] = value;
+                });
+                
+                saveBudget(budget);
+                loadBudgetView();
+            });
         }
-    });
-    
-    // Add event listeners
-    document.getElementById('budget-allocation-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        const needsPercentage = parseInt(document.getElementById('needs-percentage').value);
-        const wantsPercentage = parseInt(document.getElementById('wants-percentage').value);
-        const savingsPercentage = parseInt(document.getElementById('savings-percentage').value);
-        
-        // Validate that percentages add up to 100
-        if (needsPercentage + wantsPercentage + savingsPercentage !== 100) {
-            alert('Percentages must add up to 100%');
-            return;
-        }
-        
-        const totalBudget = parseFloat(document.getElementById('total-budget').value);
-        
-        // Update budget
-        const budget = getBudget();
-        budget.total = totalBudget;
-        budget.allocation = {
-            Needs: needsPercentage,
-            Wants: wantsPercentage,
-            Savings: savingsPercentage
-        };
-        
-        saveBudget(budget);
-        loadBudgetView();
-    });
-    
-    document.getElementById('reset-budget-btn').addEventListener('click', () => {
-        document.getElementById('needs-percentage').value = 50;
-        document.getElementById('wants-percentage').value = 30;
-        document.getElementById('savings-percentage').value = 20;
-    });
-    
-    document.getElementById('category-budget-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        const budget = getBudget();
-        
-        // Update category budgets
-        document.querySelectorAll('.category-budget').forEach(input => {
-            const category = input.getAttribute('data-category');
-            const value = parseFloat(input.value);
-            budget.categories[category] = value;
-        });
-        
-        saveBudget(budget);
-        loadBudgetView();
-    });
-}
 
 // Initialize the dashboard
 function initDashboard() {
