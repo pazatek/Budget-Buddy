@@ -2,7 +2,7 @@
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "saveHighlightedText",
-    title: "Save to Quick Notes",
+    title: "Save to Buddy Mini",
     contexts: ["selection"]
   });
 });
@@ -31,7 +31,7 @@ function saveNote(text) {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icons/icon48.png',
-        title: 'Quick Notes',
+        title: 'Budget Buddy Mini',
         message: 'Note saved successfully!'
       });
     });

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Quick Notes",
+  "name": "Budget Buddy Mini",
   "version": "1.0",
   "description": "Save highlighted text as quick notes for easy reference",
   "permissions": ["storage", "contextMenus", "notifications"],
