@@ -275,16 +275,15 @@ function loadDashboardView() {
                     <div class="col-md-4">
                         <div class="card h-100" style="border-color: ${getBudgetTypeColor('Needs')};">
                             <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="card-title mb-0">Needs (${budget.allocation.Needs}%)</h6>
-                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#needsInfo" aria-expanded="false">
-                                        <i class="bi bi-info-circle"></i> Info
+                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                        data-bs-toggle="popover" 
+                                        data-bs-placement="top" 
+                                        data-bs-content="Essential expenses like housing, food, utilities, and healthcare."
+                                        data-bs-trigger="focus">
+                                        <i class="bi bi-info-circle"></i>
                                     </button>
-                                </div>
-                                <div class="collapse mb-3" id="needsInfo">
-                                    <div class="card card-body bg-light">
-                                        <small>Essential expenses like housing, food, utilities, and healthcare.</small>
-                                    </div>
                                 </div>
                                 <div class="mt-auto">
                                     <div class="progress" style="height: 25px;">
@@ -306,16 +305,15 @@ function loadDashboardView() {
                     <div class="col-md-4">
                         <div class="card h-100" style="border-color: ${getBudgetTypeColor('Wants')};">
                             <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="card-title mb-0">Wants (${budget.allocation.Wants}%)</h6>
-                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#wantsInfo" aria-expanded="false">
-                                        <i class="bi bi-info-circle"></i> Info
+                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                        data-bs-toggle="popover" 
+                                        data-bs-placement="top" 
+                                        data-bs-content="Non-essential expenses like entertainment, dining out, and shopping."
+                                        data-bs-trigger="focus">
+                                        <i class="bi bi-info-circle"></i>
                                     </button>
-                                </div>
-                                <div class="collapse mb-3" id="wantsInfo">
-                                    <div class="card card-body bg-light">
-                                        <small>Non-essential expenses like entertainment, dining out, and shopping.</small>
-                                    </div>
                                 </div>
                                 <div class="mt-auto">
                                     <div class="progress" style="height: 25px;">
@@ -337,16 +335,15 @@ function loadDashboardView() {
                     <div class="col-md-4">
                         <div class="card h-100" style="border-color: ${getBudgetTypeColor('Savings')};">
                             <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="card-title mb-0">Savings (${budget.allocation.Savings}%)</h6>
-                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#savingsInfo" aria-expanded="false">
-                                        <i class="bi bi-info-circle"></i> Info
+                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" 
+                                        data-bs-toggle="popover" 
+                                        data-bs-placement="top" 
+                                        data-bs-content="Money set aside for future goals, investments, and emergencies."
+                                        data-bs-trigger="focus">
+                                        <i class="bi bi-info-circle"></i>
                                     </button>
-                                </div>
-                                <div class="collapse mb-3" id="savingsInfo">
-                                    <div class="card card-body bg-light">
-                                        <small>Money set aside for future goals, investments, and emergencies.</small>
-                                    </div>
                                 </div>
                                 <div class="mt-auto">
                                     <div class="progress" style="height: 25px;">
@@ -398,6 +395,24 @@ function loadDashboardView() {
             }
         }
     });
+
+    // Initialize Bootstrap components
+    setTimeout(() => {
+        // Initialize popovers
+        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl, {
+                html: true,
+                container: 'body'
+            });
+        });
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }, 100);
 }
 
 function loadExpensesView() {
@@ -425,9 +440,32 @@ function loadExpensesView() {
                                     <label for="expense-description" class="form-label">Description</label>
                                     <input type="text" class="form-control" id="expense-description" required>
                                 </div>
-                                <div class="mb-3">
-                                    <label for="expense-amount" class="form-label">Amount</label>
-                                    <input type="number" class="form-control" id="expense-amount" step="0.01" min="0.01" required>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="expense-amount" class="form-label">Amount</label>
+                                        <input type="number" class="form-control" id="expense-amount" step="0.01" min="0.01" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check mt-4">
+                                            <input class="form-check-input" type="checkbox" id="expense-taxable">
+                                            <label class="form-check-label" for="expense-taxable">
+                                                Taxable?
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="tax-options" class="row mb-3" style="display: none;">
+                                    <div class="col-md-6">
+                                        <label for="expense-tax-rate" class="form-label">Tax Rate (%)</label>
+                                        <input type="number" class="form-control" id="expense-tax-rate" step="0.1" min="0" value="7.5">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tax Amount</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="text" class="form-control" id="expense-tax-amount" readonly>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="expense-category" class="form-label">Category</label>
@@ -454,6 +492,13 @@ function loadExpensesView() {
                                 <div class="mb-3">
                                     <label for="expense-notes" class="form-label">Notes (Optional)</label>
                                     <textarea class="form-control" id="expense-notes" rows="2"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Total Amount</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="text" class="form-control" id="expense-total-amount" readonly>
+                                    </div>
                                 </div>
                                 <button type="submit" class="btn btn-success">Save Expense</button>
                                 <button type="button" class="btn btn-secondary" id="cancel-expense-btn">Cancel</button>
@@ -487,10 +532,16 @@ function loadExpensesView() {
         
         sortedExpenses.forEach(expense => {
             const budgetType = getBudgetCategoryType(expense.category);
+            const taxInfo = expense.isTaxable ? 
+                `<small class="d-block text-muted">Includes ${expense.taxRate}% tax ($${expense.taxAmount.toFixed(2)})</small>` : '';
+            
             html += `
                 <tr class="expense-item">
                     <td>${expense.date}</td>
-                    <td>${expense.description}</td>
+                    <td>
+                        ${expense.description}
+                        ${taxInfo}
+                    </td>
                     <td><span class="category-badge" style="background-color: ${getCategoryColor(expense.category)}; color: white;">${expense.category}</span></td>
                     <td><span class="badge" style="background-color: ${getBudgetTypeColor(budgetType)};">${budgetType}</span></td>
                     <td>${formatCurrency(expense.amount)}</td>
@@ -530,28 +581,103 @@ function loadExpensesView() {
         document.getElementById('expense-form-container').style.display = 'none';
     });
     
-    document.getElementById('expense-form').addEventListener('submit', (e) => {
-        e.preventDefault();
+    // Add event listeners for the tax functionality
+    setTimeout(() => {
+        const taxableCheckbox = document.getElementById('expense-taxable');
+        const taxOptions = document.getElementById('tax-options');
+        const amountInput = document.getElementById('expense-amount');
+        const taxRateInput = document.getElementById('expense-tax-rate');
+        const taxAmountDisplay = document.getElementById('expense-tax-amount');
+        const totalAmountDisplay = document.getElementById('expense-total-amount');
         
-        const id = document.getElementById('expense-id').value;
-        const expense = {
-            description: document.getElementById('expense-description').value,
-            amount: parseFloat(document.getElementById('expense-amount').value),
-            category: document.getElementById('expense-category').value,
-            date: document.getElementById('expense-date').value,
-            notes: document.getElementById('expense-notes').value
-        };
-        
-        if (id) {
-            // Update existing expense
-            expense.id = parseInt(id);
-            updateExpense(expense);
-            loadExpensesView();
-        } else {
-            // Add new expense
-            saveExpense(expense);
+        // Function to calculate tax and total
+        function calculateTaxAndTotal() {
+            const amount = parseFloat(amountInput.value) || 0;
+            
+            if (taxableCheckbox.checked) {
+                const taxRate = parseFloat(taxRateInput.value) || 0;
+                const taxAmount = amount * (taxRate / 100);
+                const totalAmount = amount + taxAmount;
+                
+                taxAmountDisplay.value = taxAmount.toFixed(2);
+                totalAmountDisplay.value = totalAmount.toFixed(2);
+            } else {
+                totalAmountDisplay.value = amount.toFixed(2);
+            }
         }
-    });
+        
+        // Show/hide tax options when checkbox is clicked
+        if (taxableCheckbox) {
+            taxableCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    taxOptions.style.display = 'flex';
+                } else {
+                    taxOptions.style.display = 'none';
+                }
+                calculateTaxAndTotal();
+            });
+        }
+        
+        // Update calculations when amount or tax rate changes
+        if (amountInput) {
+            amountInput.addEventListener('input', calculateTaxAndTotal);
+        }
+        
+        if (taxRateInput) {
+            taxRateInput.addEventListener('input', calculateTaxAndTotal);
+        }
+        
+        // Initialize total amount
+        if (amountInput && amountInput.value) {
+            calculateTaxAndTotal();
+        }
+    }, 100);
+    
+    // Update the form submission handler to include tax information
+    setTimeout(() => {
+        const expenseForm = document.getElementById('expense-form');
+        if (expenseForm) {
+            expenseForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const id = document.getElementById('expense-id').value;
+                const amount = parseFloat(document.getElementById('expense-amount').value);
+                const isTaxable = document.getElementById('expense-taxable').checked;
+                
+                let taxRate = 0;
+                let taxAmount = 0;
+                let totalAmount = amount;
+                
+                if (isTaxable) {
+                    taxRate = parseFloat(document.getElementById('expense-tax-rate').value);
+                    taxAmount = amount * (taxRate / 100);
+                    totalAmount = amount + taxAmount;
+                }
+                
+                const expense = {
+                    description: document.getElementById('expense-description').value,
+                    amount: totalAmount, // Save the total amount including tax
+                    baseAmount: amount, // Save the pre-tax amount
+                    isTaxable: isTaxable,
+                    taxRate: isTaxable ? taxRate : 0,
+                    taxAmount: isTaxable ? taxAmount : 0,
+                    category: document.getElementById('expense-category').value,
+                    date: document.getElementById('expense-date').value,
+                    notes: document.getElementById('expense-notes').value
+                };
+                
+                if (id) {
+                    // Update existing expense
+                    expense.id = parseInt(id);
+                    updateExpense(expense);
+                    loadExpensesView();
+                } else {
+                    // Add new expense
+                    saveExpense(expense);
+                }
+            });
+        }
+    }, 100);
     
     // Add event listeners to edit buttons
     const editButtons = document.querySelectorAll('.edit-expense-btn');
@@ -565,7 +691,23 @@ function loadExpensesView() {
                 document.getElementById('expense-form-title').textContent = 'Edit Expense';
                 document.getElementById('expense-id').value = expense.id;
                 document.getElementById('expense-description').value = expense.description;
-                document.getElementById('expense-amount').value = expense.amount;
+                
+                // Set the base amount if available, otherwise use the total amount
+                document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
+                
+                // Set tax information if available
+                if (expense.isTaxable) {
+                    document.getElementById('expense-taxable').checked = true;
+                    document.getElementById('tax-options').style.display = 'flex';
+                    document.getElementById('expense-tax-rate').value = expense.taxRate || 0;
+                    document.getElementById('expense-tax-amount').value = expense.taxAmount || 0;
+                    document.getElementById('expense-total-amount').value = expense.amount;
+                } else {
+                    document.getElementById('expense-taxable').checked = false;
+                    document.getElementById('tax-options').style.display = 'none';
+                    document.getElementById('expense-total-amount').value = expense.amount;
+                }
+                
                 document.getElementById('expense-category').value = expense.category;
                 document.getElementById('expense-date').value = expense.date;
                 document.getElementById('expense-notes').value = expense.notes || '';
