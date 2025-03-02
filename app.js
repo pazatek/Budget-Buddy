@@ -516,9 +516,27 @@ function loadDashboardView() {
             
             const totalExpensesType = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
             
-            // Get recent transactions
-            const recentExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-            const recentIncome = [...income].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            // Get recent transactions - UPDATED to combine and sort all transactions
+            // Create combined array of transactions
+            const allTransactions = [
+                ...expenses.map(expense => ({
+                    ...expense,
+                    type: 'expense',
+                    displayAmount: formatCurrency(expense.amount),
+                    badgeClass: 'bg-danger'
+                })),
+                ...income.map(inc => ({
+                    ...inc,
+                    type: 'income',
+                    displayAmount: formatCurrency(inc.amount),
+                    badgeClass: 'bg-success'
+                }))
+            ];
+            
+            // Sort all transactions by date (newest first)
+            const recentTransactions = allTransactions
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 5);
             
             let html = `
                 <div class="card">
@@ -556,28 +574,27 @@ function loadDashboardView() {
                                 <h5>Recent Transactions</h5>
                                 <div class="list-group">`;
             
-            // Add recent expenses
-            recentExpenses.forEach(expense => {
-                html += `
-                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-bold">${expense.description}</div>
-                            <small class="text-muted">${expense.date} - ${expense.category}</small>
-                        </div>
-                        <span class="badge bg-danger rounded-pill">${formatCurrency(expense.amount)}</span>
-                    </div>`;
-            });
-            
-            // Add recent income
-            recentIncome.forEach(income => {
-                html += `
-                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-bold">${income.description}</div>
-                            <small class="text-muted">${income.date} - Income</small>
-                        </div>
-                        <span class="badge bg-success rounded-pill">${formatCurrency(income.amount)}</span>
-                    </div>`;
+            // Add recent transactions (combined and sorted)
+            recentTransactions.forEach(transaction => {
+                if (transaction.type === 'expense') {
+                    html += `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">${transaction.description}</div>
+                                <small class="text-muted">${transaction.date} - ${transaction.category}</small>
+                            </div>
+                            <span class="badge bg-danger rounded-pill">${transaction.displayAmount}</span>
+                        </div>`;
+                } else {
+                    html += `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">${transaction.description}</div>
+                                <small class="text-muted">${transaction.date} - Income</small>
+                            </div>
+                            <span class="badge bg-success rounded-pill">${transaction.displayAmount}</span>
+                        </div>`;
+                }
             });
             
             html += `
