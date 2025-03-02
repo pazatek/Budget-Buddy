@@ -76,5 +76,73 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="app.js"></script>
+
+    <!-- Add this section to handle deep links -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // Check for deep link parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view');
+        
+        if (view) {
+          // Handle different views
+          switch(view) {
+            case 'expenses':
+              // Show expenses tab/view
+              showExpensesView();
+              
+              // Apply any filters
+              const category = urlParams.get('category');
+              if (category) {
+                filterExpensesByCategory(category);
+              }
+              break;
+              
+            case 'income':
+              // Show income tab/view
+              showIncomeView();
+              break;
+              
+            case 'dashboard':
+            default:
+              // Show dashboard
+              showDashboardView();
+              break;
+          }
+        }
+      });
+      
+      function showExpensesView() {
+        // Call your existing function to show expenses
+        document.getElementById('nav-expenses').click();
+      }
+      
+      function showIncomeView() {
+        // Call your existing function to show income
+        document.getElementById('nav-income').click();
+      }
+      
+      function showDashboardView() {
+        // Call your existing function to show dashboard
+        document.getElementById('nav-dashboard').click();
+      }
+      
+      function filterExpensesByCategory(category) {
+        // First show the expenses view
+        showExpensesView();
+        
+        // Then apply the category filter
+        // You'll need to implement this based on your existing UI
+        // For example, you might have a dropdown to select categories
+        setTimeout(() => {
+          const categorySelect = document.getElementById('expense-category');
+          if (categorySelect) {
+            categorySelect.value = category;
+            // Trigger any event handlers that should run when the category changes
+            categorySelect.dispatchEvent(new Event('change'));
+          }
+        }, 500); // Small delay to ensure the expenses view is loaded
+      }
+    </script>
 </body>
 </html> 

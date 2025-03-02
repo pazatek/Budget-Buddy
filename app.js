@@ -38,6 +38,9 @@ document.getElementById('nav-reports').addEventListener('click', () => loadRepor
 document.getElementById('nav-signout').addEventListener('click', async () => {
     await supabaseClient.auth.signOut();
     loadAuthView();
+    
+    // Also notify extension
+    chrome.runtime.sendMessage("your_extension_id_here", {action: "logout"});
 });
 
 // Helper Functions
@@ -2017,4 +2020,89 @@ async function handleLogin(e) {
     } catch (error) {
         errorElement.textContent = error.message;
     }
+}
+
+// Add a new function to handle mini extension data
+function handleMiniExtensionData(data) {
+  // This function will process data coming from the mini extension
+  if (data.type === 'expense') {
+    // Add to expenses
+    addExpense({
+      amount: data.amount,
+      description: data.description,
+      category: data.category || 'Other',
+      date: data.date
+    });
+  } else if (data.type === 'income') {
+    // Add to income
+    addIncome({
+      amount: data.amount,
+      description: data.description,
+      date: data.date
+    });
+  }
+}
+
+// Add event listener for mini extension messages
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'miniExtension') {
+    handleMiniExtensionData(event.data.data);
+  }
+});
+
+// Add a function to generate a shareable link to a specific view
+function generateDeepLink(view, filters = {}) {
+  const baseUrl = window.location.origin;
+  const queryParams = new URLSearchParams();
+  
+  // Add view parameter
+  queryParams.append('view', view);
+  
+  // Add any filters
+  for (const [key, value] of Object.entries(filters)) {
+    queryParams.append(key, value);
+  }
+  
+  return `${baseUrl}?${queryParams.toString()}`;
+}
+
+// Export functions for use in the extension
+if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+  // We're running in the extension context
+  window.budgetBuddyAPI = {
+    addExpense,
+    addIncome,
+    getCategories,
+    getSources,
+    generateDeepLink
+  };
 } 
+
+// Add this to your dashboard app
+function shareSessionWithExtension() {
+  const session = supabaseClient.auth.session();
+  
+  // Your extension ID - you'll need to replace this with your actual extension ID
+  const extensionId = "your_extension_id_here";
+  
+  chrome.runtime.sendMessage(extensionId, 
+    {
+      action: "setAuth",
+      session: session
+    }, 
+    function(response) {
+      if (response && response.success) {
+        console.log("Successfully shared session with extension");
+      }
+    }
+  );
+}
+
+// Call this when user logs in
+document.getElementById('nav-signout').addEventListener('click', () => {
+  // Your existing logout code
+  // ...
+  
+  // Also notify extension
+  chrome.runtime.sendMessage(extensionId, {action: "logout"});
+});
