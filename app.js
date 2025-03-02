@@ -535,6 +535,185 @@ function loadExpensesView() {
     });
 }
 
+function loadIncomeView() {
+    showLoading();
+    
+    const incomeList = getIncome();
+    
+    let html = `
+        <div class="card">
+            <div class="card-header">Budget Buddy Income</div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <button class="btn btn-success" id="add-income-btn">Add New Income</button>
+                    </div>
+                </div>
+                
+                <div id="income-form-container" class="mb-4" style="display: none;">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 id="income-form-title">Add New Income</h5>
+                            <form id="income-form">
+                                <input type="hidden" id="income-id">
+                                <div class="mb-3">
+                                    <label for="income-description" class="form-label">Description</label>
+                                    <input type="text" class="form-control" id="income-description" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="income-amount" class="form-label">Amount</label>
+                                    <input type="number" class="form-control" id="income-amount" step="0.01" min="0.01" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="income-source" class="form-label">Source</label>
+                                    <select class="form-select" id="income-source" required>
+                                        <option value="">Select a source</option>
+                                        <option value="Salary">Salary</option>
+                                        <option value="Freelance">Freelance</option>
+                                        <option value="Business">Business</option>
+                                        <option value="Investments">Investments</option>
+                                        <option value="Gifts">Gifts</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="income-date" class="form-label">Date</label>
+                                    <input type="date" class="form-control" id="income-date" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="income-notes" class="form-label">Notes (Optional)</label>
+                                    <textarea class="form-control" id="income-notes" rows="2"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-success">Save Income</button>
+                                <button type="button" class="btn btn-secondary" id="cancel-income-btn">Cancel</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Source</th>
+                                <th>Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+    
+    if (incomeList.length === 0) {
+        html += `
+            <tr>
+                <td colspan="5" class="text-center">No income entries found. Add your first income!</td>
+            </tr>`;
+    } else {
+        // Sort income by date (newest first)
+        const sortedIncome = [...incomeList].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        sortedIncome.forEach(income => {
+            html += `
+                <tr class="income-item">
+                    <td>${income.date}</td>
+                    <td>${income.description}</td>
+                    <td><span class="badge bg-success">${income.source}</span></td>
+                    <td class="text-success">${formatCurrency(income.amount)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary edit-income-btn" data-id="${income.id}">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger delete-income-btn" data-id="${income.id}">Delete</button>
+                    </td>
+                </tr>`;
+        });
+    }
+    
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    
+    contentArea.innerHTML = html;
+    
+    // Set default date to today for new income
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('income-date');
+    if (dateInput) {
+        dateInput.value = today;
+    }
+    
+    // Add event listeners
+    document.getElementById('add-income-btn').addEventListener('click', () => {
+        document.getElementById('income-form-container').style.display = 'block';
+        document.getElementById('income-form-title').textContent = 'Add New Income';
+        document.getElementById('income-form').reset();
+        document.getElementById('income-date').value = today;
+    });
+    
+    document.getElementById('cancel-income-btn').addEventListener('click', () => {
+        document.getElementById('income-form-container').style.display = 'none';
+    });
+    
+    document.getElementById('income-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const id = document.getElementById('income-id').value;
+        const income = {
+            description: document.getElementById('income-description').value,
+            amount: parseFloat(document.getElementById('income-amount').value),
+            source: document.getElementById('income-source').value,
+            date: document.getElementById('income-date').value,
+            notes: document.getElementById('income-notes').value
+        };
+        
+        if (id) {
+            // Update existing income
+            income.id = parseInt(id);
+            updateIncome(income);
+        } else {
+            // Add new income
+            saveIncome(income);
+        }
+        
+        // Reload income view
+        loadIncomeView();
+    });
+    
+    // Add event listeners to edit buttons
+    const editButtons = document.querySelectorAll('.edit-income-btn');
+    editButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const id = parseInt(button.getAttribute('data-id'));
+            const income = getIncome().find(income => income.id === id);
+            
+            if (income) {
+                document.getElementById('income-form-container').style.display = 'block';
+                document.getElementById('income-form-title').textContent = 'Edit Income';
+                document.getElementById('income-id').value = income.id;
+                document.getElementById('income-description').value = income.description;
+                document.getElementById('income-amount').value = income.amount;
+                document.getElementById('income-source').value = income.source;
+                document.getElementById('income-date').value = income.date;
+                document.getElementById('income-notes').value = income.notes || '';
+            }
+        });
+    });
+    
+    // Add event listeners to delete buttons
+    const deleteButtons = document.querySelectorAll('.delete-income-btn');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            if (confirm('Are you sure you want to delete this income entry?')) {
+                const id = parseInt(button.getAttribute('data-id'));
+                deleteIncome(id);
+                loadIncomeView();
+            }
+        });
+    });
+}
+
 function loadBudgetView() {
     showLoading();
     
