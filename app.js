@@ -103,25 +103,37 @@ async function getExpenses() {
         const { data: { user } } = await supabaseClient.auth.getUser();
         
         if (user) {
-            // Try to get expenses from Supabase
+            // Get expenses from Supabase
             const { data, error } = await supabaseClient
                 .from('expenses')
                 .select('*')
                 .eq('user_id', user.id)
                 .order('date', { ascending: false });
             
-            if (error) throw error;
-            return data || [];
+            if (error) {
+                console.error('Supabase query error:', error);
+                throw error;
+            }
+            
+            // Map database column names to JavaScript property names
+            return (data || []).map(expense => ({
+                id: expense.id,
+                description: expense.description,
+                amount: parseFloat(expense.amount),
+                baseAmount: expense.base_amount ? parseFloat(expense.base_amount) : parseFloat(expense.amount),
+                isTaxable: expense.is_taxable || false,
+                taxRate: expense.tax_rate ? parseFloat(expense.tax_rate) : 0,
+                taxAmount: expense.tax_amount ? parseFloat(expense.tax_amount) : 0,
+                category: expense.category,
+                date: expense.date,
+                notes: expense.notes || ''
+            }));
         } else {
-            // Fall back to local storage if not logged in
-            const expenses = localStorage.getItem(EXPENSES_KEY);
-            return expenses ? JSON.parse(expenses) : [];
+            return []; // Return empty array if not logged in
         }
     } catch (error) {
         console.error('Error fetching expenses:', error);
-        // Fall back to local storage on error
-        const expenses = localStorage.getItem(EXPENSES_KEY);
-        return expenses ? JSON.parse(expenses) : [];
+        return []; // Return empty array on error
     }
 }
 
@@ -129,26 +141,50 @@ async function saveExpense(expense) {
     try {
         // Get current user
         const { data: { user } } = await supabaseClient.auth.getUser();
+        
         if (!user) return false;
         
         // Add user_id to expense
         expense.user_id = user.id;
         
+        // Format expense to match database schema
+        const formattedExpense = {
+            user_id: user.id,
+            description: expense.description,
+            amount: expense.amount,
+            base_amount: expense.baseAmount,
+            is_taxable: expense.isTaxable,
+            tax_rate: expense.taxRate,
+            tax_amount: expense.taxAmount,
+            category: expense.category,
+            date: expense.date,
+            notes: expense.notes || ''
+        };
+        
         if (expense.id) {
             // Update existing expense
             const { error } = await supabaseClient
                 .from('expenses')
-                .update(expense)
+                .update(formattedExpense)
                 .eq('id', expense.id);
             
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase update error:', error);
+                throw error;
+            }
         } else {
             // Create new expense
-            const { error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('expenses')
-                .insert([expense]);
+                .insert([formattedExpense])
+                .select();
             
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase insert error:', error);
+                throw error;
+            }
+            
+            console.log('Created expense:', data);
         }
         
         // If we're on the expenses view, refresh it
@@ -159,30 +195,44 @@ async function saveExpense(expense) {
         return true;
     } catch (error) {
         console.error('Error saving expense:', error);
+        alert(`Error saving expense: ${error.message}`);
         return false;
     }
 }
 
 async function deleteExpense(id) {
     try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (!user) return false;
+        
+        console.log('Deleting expense with ID:', id);
+        
+        // Delete from Supabase
         const { error } = await supabaseClient
             .from('expenses')
             .delete()
             .eq('id', id);
         
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase delete error:', error);
+            throw error;
+        }
+        
+        console.log('Expense deleted successfully');
+        
+        // If we're on the expenses view, refresh it
+        if (document.querySelector('#nav-expenses').classList.contains('active')) {
+            loadExpensesView();
+        }
+        
         return true;
     } catch (error) {
         console.error('Error deleting expense:', error);
+        alert(`Error deleting expense: ${error.message}`);
         return false;
     }
-}
-
-// Add this function to clear local storage data
-function clearLocalStorageData() {
-    localStorage.removeItem(EXPENSES_KEY);
-    localStorage.removeItem(INCOME_KEY);
-    localStorage.removeItem(BUDGET_KEY);
 }
 
 // Modify the getIncome function to use Supabase when logged in
@@ -192,25 +242,33 @@ async function getIncome() {
         const { data: { user } } = await supabaseClient.auth.getUser();
         
         if (user) {
-            // Try to get income from Supabase
+            // Get income from Supabase
             const { data, error } = await supabaseClient
                 .from('income')
                 .select('*')
                 .eq('user_id', user.id)
                 .order('date', { ascending: false });
             
-            if (error) throw error;
-            return data || [];
+            if (error) {
+                console.error('Supabase query error:', error);
+                throw error;
+            }
+            
+            // Map database column names to JavaScript property names
+            return (data || []).map(income => ({
+                id: income.id,
+                description: income.description,
+                amount: parseFloat(income.amount),
+                source: income.source,
+                date: income.date,
+                notes: income.notes || ''
+            }));
         } else {
-            // Fall back to local storage if not logged in
-            const income = localStorage.getItem(INCOME_KEY);
-            return income ? JSON.parse(income) : [];
+            return []; // Return empty array if not logged in
         }
     } catch (error) {
         console.error('Error fetching income:', error);
-        // Fall back to local storage on error
-        const income = localStorage.getItem(INCOME_KEY);
-        return income ? JSON.parse(income) : [];
+        return []; // Return empty array on error
     }
 }
 
@@ -219,23 +277,17 @@ async function saveIncome(income) {
         // Get current user
         const { data: { user } } = await supabaseClient.auth.getUser();
         
-        if (user) {
-            // Add user_id to income
-            income.user_id = user.id;
-            
-            // Save to Supabase
-            const { error } = await supabaseClient
-                .from('income')
-                .insert([income]);
-            
-            if (error) throw error;
-        } else {
-            // Fall back to local storage
-            const incomeList = await getIncome();
-            income.id = Date.now(); // Use timestamp as ID
-            incomeList.push(income);
-            localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
-        }
+        if (!user) return false;
+        
+        // Add user_id to income
+        income.user_id = user.id;
+        
+        // Save to Supabase
+        const { error } = await supabaseClient
+            .from('income')
+            .insert([income]);
+        
+        if (error) throw error;
         
         // If we're on the income view, refresh it
         if (document.querySelector('#nav-income').classList.contains('active')) {
@@ -254,25 +306,15 @@ async function updateIncome(updatedIncome) {
         // Get current user
         const { data: { user } } = await supabaseClient.auth.getUser();
         
-        if (user) {
-            // Update in Supabase
-            const { error } = await supabaseClient
-                .from('income')
-                .update(updatedIncome)
-                .eq('id', updatedIncome.id);
-            
-            if (error) throw error;
-        } else {
-            // Fall back to local storage
-            const incomeList = await getIncome();
-            const index = incomeList.findIndex(income => income.id === updatedIncome.id);
-            if (index !== -1) {
-                incomeList[index] = updatedIncome;
-                localStorage.setItem(INCOME_KEY, JSON.stringify(incomeList));
-            } else {
-                return false;
-            }
-        }
+        if (!user) return false;
+        
+        // Update in Supabase
+        const { error } = await supabaseClient
+            .from('income')
+            .update(updatedIncome)
+            .eq('id', updatedIncome.id);
+        
+        if (error) throw error;
         
         return true;
     } catch (error) {
@@ -286,19 +328,19 @@ async function deleteIncome(id) {
         // Get current user
         const { data: { user } } = await supabaseClient.auth.getUser();
         
-        if (user) {
-            // Delete from Supabase
-            const { error } = await supabaseClient
-                .from('income')
-                .delete()
-                .eq('id', id);
-            
-            if (error) throw error;
-        } else {
-            // Fall back to local storage
-            const incomeList = await getIncome();
-            const filteredIncome = incomeList.filter(income => income.id !== id);
-            localStorage.setItem(INCOME_KEY, JSON.stringify(filteredIncome));
+        if (!user) return false;
+        
+        // Delete from Supabase
+        const { error } = await supabaseClient
+            .from('income')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
+        
+        // If we're on the income view, refresh it
+        if (document.querySelector('#nav-income').classList.contains('active')) {
+            loadIncomeView();
         }
         
         return true;
@@ -308,21 +350,112 @@ async function deleteIncome(id) {
     }
 }
 
-function getBudget() {
-    const budget = localStorage.getItem(BUDGET_KEY);
-    return budget ? JSON.parse(budget) : {
-        total: 0,
-        categories: {},
-        allocation: {
-            Needs: 50,
-            Wants: 30,
-            Savings: 20
+async function getBudget() {
+    try {
+        // Check if user is logged in
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+            // Get budget from Supabase
+            const { data, error } = await supabaseClient
+                .from('budgets')
+                .select('*')
+                .eq('user_id', user.id)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+            
+            if (data) {
+                return {
+                    total: data.total || 0,
+                    categories: data.category_budgets || {},
+                    allocation: {
+                        Needs: data.needs_percentage || 50,
+                        Wants: data.wants_percentage || 30,
+                        Savings: data.savings_percentage || 20
+                    }
+                };
+            }
         }
-    };
+        
+        // Return default budget if not found or not logged in
+        return {
+            total: 0,
+            categories: {},
+            allocation: {
+                Needs: 50,
+                Wants: 30,
+                Savings: 20
+            }
+        };
+    } catch (error) {
+        console.error('Error fetching budget:', error);
+        // Return default budget on error
+        return {
+            total: 0,
+            categories: {},
+            allocation: {
+                Needs: 50,
+                Wants: 30,
+                Savings: 20
+            }
+        };
+    }
 }
 
-function saveBudget(budget) {
-    localStorage.setItem(BUDGET_KEY, JSON.stringify(budget));
+async function saveBudget(budget) {
+    try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (!user) return false;
+        
+        // Format budget for Supabase
+        const formattedBudget = {
+            user_id: user.id,
+            total: budget.total || 0,
+            needs_percentage: budget.allocation.Needs || 50,
+            wants_percentage: budget.allocation.Wants || 30,
+            savings_percentage: budget.allocation.Savings || 20,
+            category_budgets: budget.categories || {}
+        };
+        
+        // Check if budget already exists
+        const { data, error: fetchError } = await supabaseClient
+            .from('budgets')
+            .select('id')
+            .eq('user_id', user.id)
+            .single();
+        
+        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+        
+        if (data) {
+            // Update existing budget
+            const { error } = await supabaseClient
+                .from('budgets')
+                .update(formattedBudget)
+                .eq('id', data.id);
+            
+            if (error) throw error;
+        } else {
+            // Insert new budget
+            const { error } = await supabaseClient
+                .from('budgets')
+                .insert([formattedBudget]);
+            
+            if (error) throw error;
+        }
+        
+        // If we're on the budget view, refresh it
+        if (document.querySelector('#nav-budget').classList.contains('active')) {
+            loadBudgetView();
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error saving budget:', error);
+        return false;
+    }
 }
 
 // View Loaders
@@ -339,7 +472,7 @@ function loadDashboardView() {
         try {
             const expenses = await getExpenses();
             const income = await getIncome();
-            const budget = getBudget();
+            const budget = await getBudget();
             
             // Clear the timeout since we've loaded data
             clearTimeout(loadingTimeout);
@@ -835,46 +968,80 @@ function loadExpensesView() {
             setTimeout(() => {
                 const expenseForm = document.getElementById('expense-form');
                 if (expenseForm) {
-                    expenseForm.addEventListener('submit', async (e) => {
+                    // Remove any existing event listeners to prevent duplicates
+                    const newForm = expenseForm.cloneNode(true);
+                    expenseForm.parentNode.replaceChild(newForm, expenseForm);
+                    
+                    newForm.addEventListener('submit', async (e) => {
                         e.preventDefault();
                         
-                        const id = document.getElementById('expense-id').value;
-                        const amount = parseFloat(document.getElementById('expense-amount').value);
-                        const isTaxable = document.getElementById('expense-taxable').checked;
-                        
-                        let taxRate = 0;
-                        let taxAmount = 0;
-                        let totalAmount = amount;
-                        
-                        if (isTaxable) {
-                            taxRate = parseFloat(document.getElementById('expense-tax-rate').value);
-                            taxAmount = amount * (taxRate / 100);
-                            totalAmount = amount + taxAmount;
+                        try {
+                            const id = document.getElementById('expense-id').value;
+                            const amount = parseFloat(document.getElementById('expense-amount').value) || 0;
+                            const isTaxable = document.getElementById('expense-taxable').checked;
+                            
+                            let taxRate = 0;
+                            let taxAmount = 0;
+                            let totalAmount = amount;
+                            
+                            if (isTaxable) {
+                                taxRate = parseFloat(document.getElementById('expense-tax-rate').value) || 0;
+                                taxAmount = amount * (taxRate / 100);
+                                totalAmount = amount + taxAmount;
+                            }
+                            
+                            // Make sure all required fields have values
+                            if (!document.getElementById('expense-description').value) {
+                                alert('Please enter a description');
+                                return;
+                            }
+                            
+                            if (!document.getElementById('expense-category').value) {
+                                alert('Please select a category');
+                                return;
+                            }
+                            
+                            if (!document.getElementById('expense-date').value) {
+                                alert('Please select a date');
+                                return;
+                            }
+                            
+                            const expense = {
+                                description: document.getElementById('expense-description').value,
+                                amount: totalAmount, // Save the total amount including tax
+                                baseAmount: amount, // Save the pre-tax amount
+                                isTaxable: isTaxable,
+                                taxRate: isTaxable ? taxRate : 0,
+                                taxAmount: isTaxable ? taxAmount : 0,
+                                category: document.getElementById('expense-category').value,
+                                date: document.getElementById('expense-date').value,
+                                notes: document.getElementById('expense-notes').value || ''
+                            };
+                            
+                            if (id) {
+                                // Update existing expense
+                                expense.id = id;
+                            }
+                            
+                            console.log('Submitting expense:', expense);
+                            
+                            // Save the expense
+                            const success = await saveExpense(expense);
+                            
+                            if (success) {
+                                // Hide the form - make sure this element exists
+                                const formContainer = document.getElementById('expense-form-container');
+                                if (formContainer) {
+                                    formContainer.style.display = 'none';
+                                }
+                                
+                                // Show success message
+                                alert('Expense saved successfully!');
+                            }
+                        } catch (error) {
+                            console.error('Error in form submission:', error);
+                            alert(`Error saving expense: ${error.message}`);
                         }
-                        
-                        const expense = {
-                            description: document.getElementById('expense-description').value,
-                            amount: totalAmount, // Save the total amount including tax
-                            baseAmount: amount, // Save the pre-tax amount
-                            isTaxable: isTaxable,
-                            taxRate: isTaxable ? taxRate : 0,
-                            taxAmount: isTaxable ? taxAmount : 0,
-                            category: document.getElementById('expense-category').value,
-                            date: document.getElementById('expense-date').value,
-                            notes: document.getElementById('expense-notes').value
-                        };
-                        
-                        if (id) {
-                            // Update existing expense
-                            expense.id = parseInt(id);
-                            await saveExpense(expense);
-                        } else {
-                            // Add new expense
-                            await saveExpense(expense);
-                        }
-                        
-                        // Reload expenses view
-                        loadExpensesView();
                     });
                 }
             }, 100);
@@ -883,31 +1050,43 @@ function loadExpensesView() {
             const editButtons = document.querySelectorAll('.edit-expense-btn');
             editButtons.forEach(button => {
                 button.addEventListener('click', async () => {
-                    const id = parseInt(button.getAttribute('data-id'));
-                    const expensesList = await getExpenses();
-                    const expense = expensesList.find(expense => expense.id === id);
-                    
-                    if (expense) {
-                        document.getElementById('expense-form-container').style.display = 'block';
-                        document.getElementById('expense-form-title').textContent = 'Edit Expense';
-                        document.getElementById('expense-id').value = expense.id;
-                        document.getElementById('expense-description').value = expense.description;
-                        document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
-                        document.getElementById('expense-taxable').checked = expense.isTaxable || false;
+                    try {
+                        const id = button.getAttribute('data-id');
+                        console.log('Editing expense with ID:', id);
                         
-                        if (expense.isTaxable) {
-                            document.getElementById('tax-options').style.display = 'flex';
-                            document.getElementById('expense-tax-rate').value = expense.taxRate;
-                            document.getElementById('expense-tax-amount').value = expense.taxAmount.toFixed(2);
-                            document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                        const expensesList = await getExpenses();
+                        const expense = expensesList.find(expense => expense.id === id);
+                        
+                        if (expense) {
+                            console.log('Found expense to edit:', expense);
+                            
+                            document.getElementById('expense-form-container').style.display = 'block';
+                            document.getElementById('expense-form-title').textContent = 'Edit Expense';
+                            document.getElementById('expense-id').value = expense.id;
+                            document.getElementById('expense-description').value = expense.description;
+                            document.getElementById('expense-amount').value = expense.baseAmount || expense.amount;
+                            document.getElementById('expense-taxable').checked = expense.isTaxable || false;
+                            
+                            if (expense.isTaxable) {
+                                document.getElementById('tax-options').style.display = 'flex';
+                                document.getElementById('expense-tax-rate').value = expense.taxRate;
+                                document.getElementById('expense-tax-amount').value = expense.taxAmount.toFixed(2);
+                                document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                            } else {
+                                document.getElementById('tax-options').style.display = 'none';
+                                document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                            }
+                            
+                            document.getElementById('expense-category').value = expense.category;
+                            document.getElementById('expense-date').value = expense.date;
+                            document.getElementById('expense-notes').value = expense.notes || '';
                         } else {
-                            document.getElementById('tax-options').style.display = 'none';
-                            document.getElementById('expense-total-amount').value = expense.amount.toFixed(2);
+                            console.error('Expense not found with ID:', id);
+                            alert('Could not find expense to edit');
                         }
-                        
-                        document.getElementById('expense-category').value = expense.category;
-                        document.getElementById('expense-date').value = expense.date;
-                        document.getElementById('expense-notes').value = expense.notes || '';
+                    } catch (error) {
+                        console.error('Error editing expense:', error);
+                        alert(`Error editing expense: ${error.message}`);
                     }
                 });
             });
@@ -917,9 +1096,10 @@ function loadExpensesView() {
             deleteButtons.forEach(button => {
                 button.addEventListener('click', async () => {
                     if (confirm('Are you sure you want to delete this expense?')) {
-                        const id = parseInt(button.getAttribute('data-id'));
+                        // Don't parse as integer - keep as UUID string
+                        const id = button.getAttribute('data-id');
                         await deleteExpense(id);
-                        loadExpensesView();
+                        // No need to call loadExpensesView() again as deleteExpense already does this
                     }
                 });
             });
@@ -1131,165 +1311,175 @@ function loadIncomeView() {
     })();
 }
 
-function loadBudgetView() {
+async function loadBudgetView() {
     showLoading();
     
-    const budget = getBudget();
-    const expenses = getExpenses();
+    // Add a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        showError("Budget loading timed out. Please refresh the page.");
+    }, 10000);
     
-    // Calculate category totals
-    const categoryTotals = {};
-    expenses.forEach(expense => {
-        if (!categoryTotals[expense.category]) {
-            categoryTotals[expense.category] = 0;
-        }
-        categoryTotals[expense.category] += parseFloat(expense.amount);
-    });
-    
-    // Calculate budget type totals (Needs, Wants, Savings)
-    const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
-    const typeCategories = { Needs: [], Wants: [], Savings: [] };
-    
-    Object.keys(categoryTotals).forEach(category => {
-        const type = getBudgetCategoryType(category);
-        typeTotals[type] += categoryTotals[category];
-        typeCategories[type].push(category);
-    });
-    
-    const totalExpenses = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
-    
-    let html = `
-        <div class="card">
-            <div class="card-header">Budget Buddy Budget</div>
-            <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-12">
-                        <h4>Budget Allocation</h4>
-                        <p>Set your budget allocation percentages for Needs, Wants, and Savings using the 50/30/20 rule or your own custom allocation.</p>
+    // Wrap in async function to properly handle promises
+    (async function() {
+        try {
+            const budget = await getBudget();
+            const expenses = await getExpenses();
+            
+            clearTimeout(loadingTimeout);
+            
+            // Calculate category totals
+            const categoryTotals = {};
+            expenses.forEach(expense => {
+                if (!categoryTotals[expense.category]) {
+                    categoryTotals[expense.category] = 0;
+                }
+                categoryTotals[expense.category] += parseFloat(expense.amount);
+            });
+            
+            // Calculate budget type totals (Needs, Wants, Savings)
+            const typeTotals = { Needs: 0, Wants: 0, Savings: 0 };
+            const typeCategories = { Needs: [], Wants: [], Savings: [] };
+            
+            Object.keys(categoryTotals).forEach(category => {
+                const type = getBudgetCategoryType(category);
+                typeTotals[type] += categoryTotals[category];
+                typeCategories[type].push(category);
+            });
+            
+            const totalExpenses = Object.values(typeTotals).reduce((sum, value) => sum + value, 0);
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">Budget Buddy Budget</div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <h4>Budget Allocation</h4>
+                                <p>Set your budget allocation percentages for Needs, Wants, and Savings using the 50/30/20 rule or your own custom allocation.</p>
+                                
+                                <form id="budget-allocation-form" class="mb-4">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="needs-percentage" class="form-label">Needs (%)</label>
+                                                <input type="number" class="form-control" id="needs-percentage" min="0" max="100" value="${budget.allocation.Needs}" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="wants-percentage" class="form-label">Wants (%)</label>
+                                                <input type="number" class="form-control" id="wants-percentage" min="0" max="100" value="${budget.allocation.Wants}" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="savings-percentage" class="form-label">Savings (%)</label>
+                                                <input type="number" class="form-control" id="savings-percentage" min="0" max="100" value="${budget.allocation.Savings}" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="total-budget" class="form-label">Total Monthly Budget</label>
+                                        <input type="number" class="form-control" id="total-budget" min="0" step="0.01" value="${budget.total}" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Save Budget Allocation</button>
+                                    <button type="button" id="reset-budget-btn" class="btn btn-outline-secondary">Reset to 50/30/20</button>
+                                </form>
+                            </div>
+                        </div>
                         
-                        <form id="budget-allocation-form" class="mb-4">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="needs-percentage" class="form-label">Needs (%)</label>
-                                        <input type="number" class="form-control" id="needs-percentage" min="0" max="100" value="${budget.allocation.Needs}" required>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="wants-percentage" class="form-label">Wants (%)</label>
-                                        <input type="number" class="form-control" id="wants-percentage" min="0" max="100" value="${budget.allocation.Wants}" required>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="savings-percentage" class="form-label">Savings (%)</label>
-                                        <input type="number" class="form-control" id="savings-percentage" min="0" max="100" value="${budget.allocation.Savings}" required>
-                                    </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5>Budget Allocation</h5>
+                                <div class="chart-container">
+                                    <canvas id="allocation-chart"></canvas>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="total-budget" class="form-label">Total Monthly Budget</label>
-                                <input type="number" class="form-control" id="total-budget" min="0" step="0.01" value="${budget.total}" required>
+                            <div class="col-md-6">
+                                <h5>Current Spending</h5>
+                                <div class="chart-container">
+                                    <canvas id="spending-chart"></canvas>
+                                </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Save Budget Allocation</button>
-                            <button type="button" id="reset-budget-btn" class="btn btn-outline-secondary">Reset to 50/30/20</button>
-                        </form>
-                    </div>
-                </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h5>Budget vs. Actual Spending</h5>
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th>Type</th>
+                                                <th>Budget</th>
+                                                <th>Actual</th>
+                                                <th>Difference</th>
+                                                <th>Progress</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+            
+            // Add budget type rows
+            ['Needs', 'Wants', 'Savings'].forEach(type => {
+                const typePercentage = budget.allocation[type];
+                const typeBudget = (budget.total * typePercentage / 100);
+                const typeActual = typeTotals[type];
+                const difference = typeBudget - typeActual;
+                const percentage = typeBudget > 0 ? (typeActual / typeBudget * 100) : 0;
                 
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <h5>Budget Allocation</h5>
-                        <div class="chart-container">
-                            <canvas id="allocation-chart"></canvas>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5>Current Spending</h5>
-                        <div class="chart-container">
-                            <canvas id="spending-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
+                html += `
+                    <tr class="table-active">
+                        <td><strong>${type}</strong></td>
+                        <td></td>
+                        <td>${formatCurrency(typeBudget)}</td>
+                        <td>${formatCurrency(typeActual)}</td>
+                        <td class="${difference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(difference)}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar ${percentage <= 100 ? 'bg-success' : 'bg-danger'}" 
+                                    role="progressbar" 
+                                    style="width: ${Math.min(percentage, 100)}%" 
+                                    aria-valuenow="${typeActual}" 
+                                    aria-valuemin="0" 
+                                    aria-valuemax="${typeBudget}">
+                                    ${percentage.toFixed(0)}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
                 
-                <div class="row">
-                    <div class="col-md-12">
-                        <h5>Budget vs. Actual Spending</h5>
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th>Type</th>
-                                        <th>Budget</th>
-                                        <th>Actual</th>
-                                        <th>Difference</th>
-                                        <th>Progress</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
-    
-    // Add budget type rows
-    ['Needs', 'Wants', 'Savings'].forEach(type => {
-        const typePercentage = budget.allocation[type];
-        const typeBudget = (budget.total * typePercentage / 100);
-        const typeActual = typeTotals[type];
-        const difference = typeBudget - typeActual;
-        const percentage = typeBudget > 0 ? (typeActual / typeBudget * 100) : 0;
-        
-        html += `
-            <tr class="table-active">
-                <td><strong>${type}</strong></td>
-                <td></td>
-                <td>${formatCurrency(typeBudget)}</td>
-                <td>${formatCurrency(typeActual)}</td>
-                <td class="${difference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(difference)}</td>
-                <td>
-                    <div class="progress">
-                        <div class="progress-bar ${percentage <= 100 ? 'bg-success' : 'bg-danger'}" 
-                            role="progressbar" 
-                            style="width: ${Math.min(percentage, 100)}%" 
-                            aria-valuenow="${typeActual}" 
-                            aria-valuemin="0" 
-                            aria-valuemax="${typeBudget}">
-                            ${percentage.toFixed(0)}%
-                        </div>
-                    </div>
-                </td>
-            </tr>`;
-        
-        // Add category rows for this type
-        typeCategories[type].forEach(category => {
-            const categoryBudget = budget.categories[category] || 0;
-            const categoryActual = categoryTotals[category] || 0;
-            const catDifference = categoryBudget - categoryActual;
-            const catPercentage = categoryBudget > 0 ? (categoryActual / categoryBudget * 100) : 0;
+                // Add category rows for this type
+                typeCategories[type].forEach(category => {
+                    const categoryBudget = budget.categories[category] || 0;
+                    const categoryActual = categoryTotals[category] || 0;
+                    const catDifference = categoryBudget - categoryActual;
+                    const catPercentage = categoryBudget > 0 ? (categoryActual / categoryBudget * 100) : 0;
+                    
+                    html += `
+                        <tr>
+                            <td class="ps-4">${category}</td>
+                            <td><span class="badge" style="background-color: ${getBudgetTypeColor(type)};">${type}</span></td>
+                            <td>${formatCurrency(categoryBudget)}</td>
+                            <td>${formatCurrency(categoryActual)}</td>
+                            <td class="${catDifference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(catDifference)}</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar ${catPercentage <= 100 ? 'bg-success' : 'bg-danger'}" 
+                                        role="progressbar" 
+                                        style="width: ${Math.min(catPercentage, 100)}%" 
+                                        aria-valuenow="${categoryActual}" 
+                                        aria-valuemin="0" 
+                                        aria-valuemax="${categoryBudget}">
+                                        ${catPercentage.toFixed(0)}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>`;
+                });
+            });
             
             html += `
-                <tr>
-                    <td class="ps-4">${category}</td>
-                    <td><span class="badge" style="background-color: ${getBudgetTypeColor(type)};">${type}</span></td>
-                    <td>${formatCurrency(categoryBudget)}</td>
-                    <td>${formatCurrency(categoryActual)}</td>
-                    <td class="${catDifference >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(catDifference)}</td>
-                    <td>
-                        <div class="progress">
-                            <div class="progress-bar ${catPercentage <= 100 ? 'bg-success' : 'bg-danger'}" 
-                                role="progressbar" 
-                                style="width: ${Math.min(catPercentage, 100)}%" 
-                                aria-valuenow="${categoryActual}" 
-                                aria-valuemin="0" 
-                                aria-valuemax="${categoryBudget}">
-                                ${catPercentage.toFixed(0)}%
-                            </div>
-                        </div>
-                    </td>
-                </tr>`;
-        });
-    });
-    
-    html += `
                                 </tbody>
                             </table>
                         </div>
@@ -1302,65 +1492,65 @@ function loadBudgetView() {
                         <form id="category-budget-form">
                             <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Needs')};">Needs</h6>
                             <div class="row">`;
-    
-    // Add inputs for Needs categories
-    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Needs').forEach(category => {
-        html += `
-            <div class="col-md-4 mb-3">
-                <div class="input-group">
-                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Needs')}; color: white;">${category}</span>
-                    <input type="number" class="form-control category-budget" 
-                        data-category="${category}" 
-                        min="0" 
-                        step="0.01" 
-                        value="${budget.categories[category] || 0}">
-                </div>
-            </div>`;
-    });
-    
-    html += `
+            
+            // Add inputs for Needs categories
+            Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Needs').forEach(category => {
+                html += `
+                    <div class="col-md-4 mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Needs')}; color: white;">${category}</span>
+                            <input type="number" class="form-control category-budget" 
+                                data-category="${category}" 
+                                min="0" 
+                                step="0.01" 
+                                value="${budget.categories[category] || 0}">
+                        </div>
+                    </div>`;
+            });
+            
+            html += `
                             </div>
                             
                             <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Wants')};">Wants</h6>
                             <div class="row">`;
-    
-    // Add inputs for Wants categories
-    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Wants').forEach(category => {
-        html += `
-            <div class="col-md-4 mb-3">
-                <div class="input-group">
-                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Wants')}; color: white;">${category}</span>
-                    <input type="number" class="form-control category-budget" 
-                        data-category="${category}" 
-                        min="0" 
-                        step="0.01" 
-                        value="${budget.categories[category] || 0}">
-                </div>
-            </div>`;
-    });
-    
-    html += `
+            
+            // Add inputs for Wants categories
+            Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Wants').forEach(category => {
+                html += `
+                    <div class="col-md-4 mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Wants')}; color: white;">${category}</span>
+                            <input type="number" class="form-control category-budget" 
+                                data-category="${category}" 
+                                min="0" 
+                                step="0.01" 
+                                value="${budget.categories[category] || 0}">
+                        </div>
+                    </div>`;
+            });
+            
+            html += `
                             </div>
                             
                             <h6 class="mt-3 mb-2" style="color: ${getBudgetTypeColor('Savings')};">Savings</h6>
                             <div class="row">`;
-    
-    // Add inputs for Savings categories
-    Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Savings').forEach(category => {
-        html += `
-            <div class="col-md-4 mb-3">
-                <div class="input-group">
-                    <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Savings')}; color: white;">${category}</span>
-                    <input type="number" class="form-control category-budget" 
-                        data-category="${category}" 
-                        min="0" 
-                        step="0.01" 
-                        value="${budget.categories[category] || 0}">
-                </div>
-            </div>`;
-    });
-    
-    html += `
+            
+            // Add inputs for Savings categories
+            Object.keys(BUDGET_CATEGORIES).filter(category => BUDGET_CATEGORIES[category] === 'Savings').forEach(category => {
+                html += `
+                    <div class="col-md-4 mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text" style="background-color: ${getBudgetTypeColor('Savings')}; color: white;">${category}</span>
+                            <input type="number" class="form-control category-budget" 
+                                data-category="${category}" 
+                                min="0" 
+                                step="0.01" 
+                                value="${budget.categories[category] || 0}">
+                        </div>
+                    </div>`;
+            });
+            
+            html += `
                             </div>
                             <button type="submit" class="btn btn-primary">Save Category Budgets</button>
                         </form>
@@ -1424,7 +1614,7 @@ function loadBudgetView() {
             });
             
             // Add event listeners
-            document.getElementById('budget-allocation-form').addEventListener('submit', (e) => {
+            document.getElementById('budget-allocation-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
                 const needsPercentage = parseInt(document.getElementById('needs-percentage').value);
@@ -1440,7 +1630,7 @@ function loadBudgetView() {
                 const totalBudget = parseFloat(document.getElementById('total-budget').value);
                 
                 // Update budget
-                const budget = getBudget();
+                const budget = await getBudget();
                 budget.total = totalBudget;
                 budget.allocation = {
                     Needs: needsPercentage,
@@ -1448,7 +1638,7 @@ function loadBudgetView() {
                     Savings: savingsPercentage
                 };
                 
-                saveBudget(budget);
+                await saveBudget(budget);
                 loadBudgetView();
             });
             
@@ -1458,10 +1648,10 @@ function loadBudgetView() {
                 document.getElementById('savings-percentage').value = 20;
             });
             
-            document.getElementById('category-budget-form').addEventListener('submit', (e) => {
+            document.getElementById('category-budget-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                const budget = getBudget();
+                const budget = await getBudget();
                 
                 // Update category budgets
                 document.querySelectorAll('.category-budget').forEach(input => {
@@ -1470,12 +1660,177 @@ function loadBudgetView() {
                     budget.categories[category] = value;
                 });
                 
-                saveBudget(budget);
+                await saveBudget(budget);
                 loadBudgetView();
             });
+        } catch (error) {
+            clearTimeout(loadingTimeout);
+            console.error("Error loading budget view:", error);
+            showError(`Error loading budget: ${error.message}`);
         }
+    })();
+}
 
-// Update the initApp function to clear local storage when logged in
+async function loadReportsView() {
+    showLoading();
+    
+    // Add a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        showError("Reports loading timed out. Please refresh the page.");
+    }, 10000);
+    
+    // Wrap in async function to properly handle promises
+    (async function() {
+        try {
+            const expenses = await getExpenses();
+            const income = await getIncome();
+            clearTimeout(loadingTimeout);
+            
+            // Calculate monthly totals for expenses and income
+            const monthlyExpenses = {};
+            const monthlyIncome = {};
+            
+            // Process expenses
+            expenses.forEach(expense => {
+                const month = expense.date.substring(0, 7); // Format: YYYY-MM
+                if (!monthlyExpenses[month]) {
+                    monthlyExpenses[month] = 0;
+                }
+                monthlyExpenses[month] += parseFloat(expense.amount);
+            });
+            
+            // Process income
+            income.forEach(inc => {
+                const month = inc.date.substring(0, 7); // Format: YYYY-MM
+                if (!monthlyIncome[month]) {
+                    monthlyIncome[month] = 0;
+                }
+                monthlyIncome[month] += parseFloat(inc.amount);
+            });
+            
+            // Get all months from both datasets
+            const allMonths = [...new Set([...Object.keys(monthlyExpenses), ...Object.keys(monthlyIncome)])].sort();
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">Budget Buddy Reports</div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <h5>Monthly Overview</h5>
+                                <div class="chart-container" style="height: 400px;">
+                                    <canvas id="monthly-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h5>Monthly Summary</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Month</th>
+                                                <th>Income</th>
+                                                <th>Expenses</th>
+                                                <th>Net</th>
+                                                <th>Savings Rate</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+            
+            // Add rows for each month
+            allMonths.forEach(month => {
+                const monthIncome = monthlyIncome[month] || 0;
+                const monthExpenses = monthlyExpenses[month] || 0;
+                const net = monthIncome - monthExpenses;
+                const savingsRate = monthIncome > 0 ? ((monthIncome - monthExpenses) / monthIncome * 100).toFixed(1) : 0;
+                
+                const displayMonth = new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                
+                html += `
+                    <tr>
+                        <td>${displayMonth}</td>
+                        <td class="text-success">${formatCurrency(monthIncome)}</td>
+                        <td class="text-danger">${formatCurrency(monthExpenses)}</td>
+                        <td class="${net >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(net)}</td>
+                        <td>${savingsRate}%</td>
+                    </tr>`;
+            });
+            
+            html += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            contentArea.innerHTML = html;
+            
+            // Create monthly chart
+            const monthlyCtx = document.getElementById('monthly-chart').getContext('2d');
+            
+            // Prepare data for chart
+            const labels = allMonths.map(month => {
+                return new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+            });
+            
+            const incomeData = allMonths.map(month => monthlyIncome[month] || 0);
+            const expenseData = allMonths.map(month => monthlyExpenses[month] || 0);
+            const netData = allMonths.map(month => (monthlyIncome[month] || 0) - (monthlyExpenses[month] || 0));
+            
+            new Chart(monthlyCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Income',
+                            data: incomeData,
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Expenses',
+                            data: expenseData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Net',
+                            data: netData,
+                            type: 'line',
+                            fill: false,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+        } catch (error) {
+            clearTimeout(loadingTimeout);
+            console.error("Error loading reports view:", error);
+            showError(`Error loading reports: ${error.message}`);
+        }
+    })();
+}
+
+// Update the initApp function to remove local storage references
 async function initApp() {
     // Add active class to navigation links
     navLinks.forEach(link => {
@@ -1490,10 +1845,7 @@ async function initApp() {
         const { data: { user } } = await supabaseClient.auth.getUser();
         
         if (user) {
-            // User is logged in, clear local storage to avoid data confusion
-            clearLocalStorageData();
-            
-            // Load dashboard
+            // User is logged in, load dashboard
             document.getElementById('nav-dashboard').classList.add('active');
             loadDashboardView();
         } else {
@@ -1504,9 +1856,6 @@ async function initApp() {
         // Listen for auth state changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN') {
-                // Clear local storage when signing in
-                clearLocalStorageData();
-                
                 document.getElementById('nav-dashboard').classList.add('active');
                 loadDashboardView();
             } else if (event === 'SIGNED_OUT') {
@@ -1515,29 +1864,13 @@ async function initApp() {
         });
     } catch (error) {
         console.error('Authentication error:', error);
-        // If there's an error with Supabase, fall back to local storage mode
-        document.getElementById('nav-dashboard').classList.add('active');
-        loadDashboardView();
+        // Show auth view on error
+        loadAuthView();
     }
 }
 
 // Start the application
 initApp();
-
-// Simplify the expense saving function
-function saveExpense(expense) {
-    expense.id = Date.now();
-    const expenses = getExpenses();
-    expenses.push(expense);
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-    
-    // If we're on the expenses view, refresh it
-    if (document.querySelector('#nav-expenses').classList.contains('active')) {
-        loadExpensesView();
-    }
-    
-    return true;
-}
 
 // Add this function to your app.js
 function loadAuthView() {
@@ -1577,12 +1910,6 @@ function loadAuthView() {
                         <div id="signup-error" class="text-danger mt-2"></div>
                     </div>
                 </div>
-                
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <button id="migrate-data-btn" class="btn btn-warning">Migrate Local Data to Supabase</button>
-                    </div>
-                </div>
             </div>
         </div>`;
     
@@ -1591,7 +1918,6 @@ function loadAuthView() {
     // Add event listeners
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('signup-form').addEventListener('submit', handleSignup);
-    document.getElementById('migrate-data-btn').addEventListener('click', migrateLocalDataToSupabase);
 }
 
 // Add authentication handlers
@@ -1636,93 +1962,5 @@ async function handleLogin(e) {
         loadDashboardView();
     } catch (error) {
         errorElement.textContent = error.message;
-    }
-}
-
-// Add migration function
-async function migrateLocalDataToSupabase() {
-    // Check if user is logged in
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    
-    if (!user) {
-        alert('Please sign in first to migrate your data');
-        return;
-    }
-    
-    try {
-        // Show migration status
-        const statusDiv = document.createElement('div');
-        statusDiv.className = 'alert alert-info mt-3';
-        statusDiv.textContent = 'Migration in progress...';
-        document.querySelector('.card-body').appendChild(statusDiv);
-        
-        // Migrate expenses
-        const expenses = JSON.parse(localStorage.getItem(EXPENSES_KEY) || '[]');
-        if (expenses.length > 0) {
-            statusDiv.textContent = 'Migrating expenses...';
-            
-            // Add user_id to each expense
-            const formattedExpenses = expenses.map(expense => ({
-                ...expense,
-                user_id: user.id,
-                id: undefined // Let Supabase generate new IDs
-            }));
-            
-            const { error: expensesError } = await supabaseClient
-                .from('expenses')
-                .insert(formattedExpenses);
-            
-            if (expensesError) throw new Error(`Error migrating expenses: ${expensesError.message}`);
-        }
-        
-        // Migrate income
-        const income = JSON.parse(localStorage.getItem(INCOME_KEY) || '[]');
-        if (income.length > 0) {
-            statusDiv.textContent = 'Migrating income...';
-            
-            const formattedIncome = income.map(item => ({
-                ...item,
-                user_id: user.id,
-                id: undefined
-            }));
-            
-            const { error: incomeError } = await supabaseClient
-                .from('income')
-                .insert(formattedIncome);
-            
-            if (incomeError) throw new Error(`Error migrating income: ${incomeError.message}`);
-        }
-        
-        // Migrate budget
-        const budget = JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}');
-        if (Object.keys(budget).length > 0) {
-            statusDiv.textContent = 'Migrating budget...';
-            
-            const formattedBudget = {
-                user_id: user.id,
-                total: budget.total || 0,
-                needs_percentage: budget.allocation?.Needs || 50,
-                wants_percentage: budget.allocation?.Wants || 30,
-                savings_percentage: budget.allocation?.Savings || 20,
-                category_budgets: budget.categories || {}
-            };
-            
-            const { error: budgetError } = await supabaseClient
-                .from('budgets')
-                .insert([formattedBudget]);
-            
-            if (budgetError) throw new Error(`Error migrating budget: ${budgetError.message}`);
-        }
-        
-        statusDiv.className = 'alert alert-success mt-3';
-        statusDiv.textContent = 'Migration complete! Your data is now stored in Supabase.';
-    } catch (error) {
-        console.error('Migration error:', error);
-        const statusDiv = document.querySelector('.alert') || document.createElement('div');
-        statusDiv.className = 'alert alert-danger mt-3';
-        statusDiv.textContent = `Migration failed: ${error.message}`;
-        if (!statusDiv.parentNode) {
-            document.querySelector('.card-body').appendChild(statusDiv);
-        }
     }
 } 
